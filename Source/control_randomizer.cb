@@ -1,0 +1,22 @@
+control_place_pawn	= False
+control_pawn_x		= 0
+control_pawn_y		= 0
+
+If CPUWait And timer_cpu_wait = 0 Then timer_cpu_wait = Timer()
+
+If Timer() > timer_cpu_wait + CPU_WAIT_TIME Or CPUWait=False Then
+	timer_cpu_wait	= 0
+	cpm				= CanPlayerMove(Turn)
+	Repeat
+		selected_index	= Rand(1,CountFreeCells)
+		i				= 0
+		For fc.FreeCell = Each FreeCell
+			i+1
+			If i = selected_index Then
+				control_pawn_x	= fc\cell_x
+				control_pawn_y	= fc\cell_y
+			EndIf
+		Next fc
+	Until CanMakeFlips(Turn,control_pawn_x,control_pawn_y) Or cpm=False
+	If cpm Then control_place_pawn = True
+EndIf

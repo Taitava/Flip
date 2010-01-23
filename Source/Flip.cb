@@ -1,0 +1,819 @@
+
+//Configuration
+Const GAME_TITLE				= "Flip"
+Const CONFIG_FILE_PATH			= "Settings"
+Const WHITE_PAWN_IMAGE_PATH		= "White.png"	'Set empty To use plain white Circle instead
+Const BLACK_PAWN_IMAGE_PATH		= "Black.png"	'Set empty To use plain black Circle instead
+Const INSTRUCTIONS_FILE_PATH	= "ReadMe.txt"
+Const MUSIC_DIRECTORY			= "Music\"		'Remember ending backslash!
+Const MAP_W						= 8				'In cells
+Const MAP_H						= 8				'In cells
+Const MAP_X						= 0				'In pixels
+Const MAP_Y						= 20			'In pixels
+Const CELL_W					= 64			'In pixels
+Const CELL_H					= 64			'In pixels
+Const PAWN_ANIMATION_DURATION	= 200			'In milliseconds
+Const COUNT_GAME_LOG_RECORDS_MAX= 8				'In lines
+Const EXTRA_SPACE_BOTTOM		= 130			'In pixels
+Const CPU_WAIT_TIME				= 2000			'In milliseconds
+Const WINDOW_GAME_LOG_W			= 320			'In pixels
+Const WINDOW_GAME_LOG_H			= 100			'In pixels
+Const WINDOW_ABOUT_W			= 280			'In pixels
+Const WINDOW_ABOUT_H			= 84			'In pixels
+Const WINDOW_PAWNS_W			= 80			'In pixels
+Const WINDOW_PAWNS_H			= 100			'In pixels
+Const WINDOW_SCORES_W			= 80			'In pixels
+Const WINDOW_SCORES_H			= 100			'In pixels
+Const WINDOW_FILE_W				= 400			'In pixels
+Const WINDOW_FILE_H				= 400			'In pixels
+Const COUNT_MUSIC_FORMATS		= 14
+Const MAX_MUSIC_PLAY_TIME		= 300000		'In milliseconds. CB's audio system bugs with some songs repeating them over And over. This setting defines a maximum how long a song can be played.
+Const LIST_FILES				= 1				'Identifier For file list element.
+
+//Libraries
+Include "CBSDK.cb"
+Include "Janelas.cb"
+Include "menu.cb"
+
+//Data structure
+Dim Map(MAP_W-1,MAP_H-1)				As Byte
+Dim MapAnimation(MAP_W-1,MAP_H-1)		As Integer
+Dim MapFreeCell(MAP_W-1,MAP_H-1)		As Integer
+Dim CountPawns(1)						As Byte
+Dim Score(3)							As Short 'Cell 0 is For white, 1 For black, 2 For draws And 3 For stalemates
+Dim MusicFormats(COUNT_MUSIC_FORMATS-1)	As String
+MusicFormats(0)	= "raw" : MusicFormats(1)	= "m"+"od"	: MusicFormats(2)	= "s3m" 	: MusicFormats(3) = "xm" : MusicFormats(4)	= "it"
+MusicFormats(5)	= "rmi" : MusicFormats(6)	= "wav"		: MusicFormats(7)	= "mp2" 	: MusicFormats(8) = "mp3" : MusicFormats(9)	= "ogg"
+MusicFormats(10)= "asf" : MusicFormats(11)	= "mo3"		: MusicFormats(12)	= "m"+"id"	: MusicFormats(13) = "wma"
+Global MenuFile, MenuSettings, MenuHelp, MenuPlayer1, MenuPlayer2, MenuAudio
+Global OptionNewGame, OptionQuit, OptionPlayer1Human, OptionPlayer1Randomizer, OptionPlayer1Intelligent, OptionPlayer2Human, OptionPlayer2Randomizer, OptionPlayer2Intelligent
+Global OptionCPUWait, OptionSaveGame, OptionLoadGame, OptionInstructions, OptionAbout, OptionCannotMoveChangeTurn, OptionCannotMoveStalemate, OptionCannotMoveOpponentWins
+Global OptionCannotMoveProsperousWins, OptionAnimatedPawns, OptionShowGameLog, OptionShowPawnStats, OptionShowScores, OptionResetScores, OptionMuteAudio, OptionPlaySounds
+Global OptionPlayMusic, OptionChangeSong, OptionRepeatSong
+Global AnimatedPawns	: AnimatedPawns	= True
+Global ShowGameLog		: ShowGameLog	= True
+Global ShowPawnStats	: ShowPawnStats	= True
+Global ShowScores		: ShowScores	= True
+Global Player1Type		: Player1Type	= 0
+Global Player2Type		: Player2Type	= 0
+Global CPUWait			: CPUWait		= 0
+Global CannotMove		: CannotMove	= 0
+Global Turn, GameOn
+Global ImageBlackPawn, ImageWhitePawn
+Global WindowGameLog, WindowAbout, WindowPawns, WindowScores, WindowFile
+Global CountGameLogRecords, CountMusics, MusicChannel, SoundMove, SoundWipeOut, SoundMoveChannel, SoundsEnabled, MusicEnabled, MuteAudio, TimerMusicPlayingStarted
+Global RepeatSong
+Global FileSelectorMode
+Global CurrentGameSaveName As String
+Global InputFileName As String
+Global CurrentMusicName As String
+Global CountFreeCells
+
+Type GameLog
+	Field record As String
+EndType
+
+Type Music
+	Field file_path As String
+EndType
+
+Type FreeCell
+	Field cell_x
+	Field cell_y
+EndType
+
+//Setup
+SCREEN MAP_W*CELL_W+MAP_X, MAP_H*CELL_H+MAP_Y + EXTRA_SPACE_BOTTOM
+SCREEN 800,600,32,0
+SetWindow GAME_TITLE
+ClsColor 212,208,200
+ChangeWindowBackgroundColor	(ALL_WINDOWS,	190, 200, 200)
+ChangeWindowBorderColors	(ALL_WINDOWS,	192, 192, 192,	192, 192, 192)
+ChangeWindowHeadbarColors	(ALL_WINDOWS,	100, 100, 100,	192, 192, 192,	100, 100, 100,	192, 192, 192)
+ChangeWindowTitle			(ALL_WINDOWS,	000, 000, 000)
+SetActiveWindowMethod(0)
+MenuFile						= NewMenu("File")
+MenuPlayer1						= NewMenu("White player")
+MenuPlayer2						= NewMenu("Black player")
+MenuSettings					= NewMenu("Settings")
+MenuAudio						= NewMenu("Audio")
+MenuHelp						= NewMenu("Help")
+OptionNewGame					= NewOption(MenuFile,		"New game")
+								  NewOption(MenuFile,		"-")
+OptionSaveGame					= NewOption(MenuFile,		"Save game")
+OptionLoadGame					= NewOption(MenuFile,		"Load game")
+								  NewOption(MenuFile,		"-")
+OptionQuit						= NewOption(MenuFile,		"Quit")
+OptionPlayer1Human				= NewOption(MenuPlayer1,	"HUMAN")
+OptionPlayer1Randomizer			= NewOption(MenuPlayer1,	"RANDOMIZER")
+'OptionPlayer1Intelligent		= NewOption(MenuPlayer1,	"INTELLIGENT")
+OptionPlayer1Intelligent		= False 'Not implemented yet
+OptionPlayer2Human				= NewOption(MenuPlayer2,	"HUMAN")
+OptionPlayer2Randomizer			= NewOption(MenuPlayer2,	"RANDOMIZER")
+'OptionPlayer2Intelligent		= NewOption(MenuPlayer2,	"INTELLIGENT")
+OptionPlayer2Intelligent		= False 'Not implemented yet
+OptionAnimatedPawns				= NewOption(MenuSettings,	"ANIMATED PAWNS")
+OptionCPUWait					= NewOption(MenuSettings,	"CPU Wait")
+								  NewOption(MenuSettings,	"-")
+								  NewOption(MenuSettings,	".When player cannot move:")
+OptionCannotMoveChangeTurn		= NewOption(MenuSettings,	"[X] Opponent will play")
+OptionCannotMoveStalemate		= NewOption(MenuSettings,	"[ ] Stalemate")
+OptionCannotMoveOpponentWins	= NewOption(MenuSettings,	"[ ] Opponent will win")
+OptionCannotMoveProsperousWins	= NewOption(MenuSettings,	"[ ] Prosperous player will win")
+								  NewOption(MenuSettings,	"-")
+OptionShowGameLog				= NewOption(MenuSettings,	"SHOW GAME Log")
+OptionShowPawnStats				= NewOption(MenuSettings,	"SHOW PAWN STATS")
+OptionShowScores				= NewOption(MenuSettings,	"SHOW SCORES")
+								  NewOption(MenuSettings,	"-")
+OptionResetScores				= NewOption(MenuSettings,	"Reset scores")
+OptionMuteAudio					= NewOption(MenuAudio,		"MUTE ALL")
+OptionPlaySounds				= NewOption(MenuAudio,		"PLAY SOUNDS")
+OptionPlayMusic					= NewOption(MenuAudio,		"PLAY MUSIC")
+								  NewOption(MenuAudio,		"-")
+OptionRepeatSong				= NewOption(MenuAudio,		"Repeat SONG")
+OptionChangeSong				= NewOption(MenuAudio,		"Change song")
+OptionInstructions				= NewOption(MenuHelp,		"Instructions")
+OptionAbout						= NewOption(MenuHelp,		"About Flip")
+WindowAbout						= NewWindow("About Flip",	ScreenWidth()/2-WINDOW_ABOUT_W/2,	ScreenHeight()/2-WINDOW_ABOUT_H/2,	WINDOW_ABOUT_W,		WINDOW_ABOUT_H)
+WindowPawns						= NewWindow("Pawns",		6,									ScreenHeight()-105,					WINDOW_PAWNS_W,		WINDOW_PAWNS_H)
+WindowScores					= NewWindow("Scores",		ScreenWidth()-6-WINDOW_SCORES_W,	ScreenHeight()-105,					WINDOW_SCORES_W,	WINDOW_SCORES_H)
+WindowGameLog					= NewWindow("Game Log",		ScreenWidth()/2-WINDOW_GAME_LOG_W/2,ScreenHeight()-105,					WINDOW_GAME_LOG_W,	WINDOW_GAME_LOG_H)
+WindowFile						= NewWindow("",				-WINDOW_FILE_W-10,					ScreenHeight()/2-WINDOW_FILE_H/2-20,WINDOW_FILE_W,		WINDOW_FILE_H)
+SoundMove						= LoadSound("Move.wav")
+SoundWipeOut					= LoadSound("WipeOut.wav")
+DrawToWindow(WindowAbout)
+	Color 0,0,0
+	Text 0,	0, 						"Made by Jare in 2010."
+	Text 0,	12*YCoordinateFactor,	"Can be used a"+"nd distributed"
+	Text 0, 24*YCoordinateFactor,	"freely for non-commercial purposes"
+	Text 0, 36*YCoordinateFactor,	"but you must distribute all source"
+	Text 0, 48*YCoordinateFactor,	"code files (including modified)"
+	text 0, 60*YCoordinateFactor,	"with the application."
+	Text 0, 72*YCoordinateFactor,	"PRESS SPACE T"+"O CLOSE"
+DrawToScreen
+HideWindow(WindowAbout)
+
+If FileExists(WHITE_PAWN_IMAGE_PATH) Then ImageWhitePawn = LoadImage(WHITE_PAWN_IMAGE_PATH) : MaskImage ImageWhitePawn, 128,64,0
+If FileExists(BLACK_PAWN_IMAGE_PATH) Then ImageBlackPawn = LoadImage(BLACK_PAWN_IMAGE_PATH) : MaskImage ImageBlackPawn, 128,64,0
+
+LoadMusicList()
+LoadConfig()
+ResetGame()
+
+//Main loop
+Repeat
+	'Hide About Window
+	If KeyHit(cbKeySpace) Then HideWindow(WindowAbout)
+	
+	If GameOn Then
+		'Display Winner
+		If Not CanPlayerMove() Then
+			If CountPawns(0) = CountPawns(1) Then
+				message$ = "Draw!"
+				Score(2) = Score(2) + 1
+			ElseIf CountPawns(0) > CountPawns(1)
+				message = "White wins!"
+				Score(0) = Score(0) + 1
+			Else
+				message = "Black wins!"
+				Score(1) = Score(1) + 1
+			EndIf
+			If CountPawns(0) = 0 Or CountPawns(1) = 0 Then
+				Sound(SoundWipeOut)
+				message = Iff(CountPawns(1)=0,"White","Black")+" wipes "+Iff(CountPawns(1)=0,"black","white")+" out a"+"nd wins!"
+			EndIf
+			NewGameLogRecord(message,True)
+			GameOn = False
+		EndIf		
+	EndIf
+	
+	If GameOn Then
+		'Change Turn If player cannot move
+		If Not CanPlayerMove(Turn) Then
+			NewGameLogRecord(Iff(Turn=1,"White","Black")+" cannot move.")
+			Select CannotMove
+			Case 0
+				'Change turn
+				Turn = Iff(Turn=1,2,1)
+				NewGameLogRecord(Iff(Turn=1,"White","Black")+" continues.")
+			Case 1
+				'Stalemate
+				GameOn = OFF
+				NewGameLogRecord("Stalemate!",True)
+				Score(3) = Score(3) + 1
+			Case 2
+				'Opponen wins
+				GameOn = OFF
+				NewGameLogRecord(Iff(Turn=2,"White","Black")+" wins!",True)
+				Score(Turn-1) = Score(Turn-1) + 1
+			Case 3
+				'Opponen wins
+				GameOn		= OFF
+				If CountPawns(0) = CountPawns(1) Then
+					NewGameLogRecord("Draw!",True)
+					Score(2) = Score(2) + 1
+				Else
+					prosperous = CountPawns(1) > CountPawns(0)
+					NewGameLogRecord("Prosperous player "+Iff(prosperous, "black", "white")+" wins!",True)
+					Score(prosperous) = Score(prosperous) + 1
+				EndIf
+			EndSelect
+		EndIf
+		
+		//Controller
+		control_type = Iff(Turn=1, Player1Type, Player2Type)
+		Select control_type
+		Case 0
+			'Human
+			Include "control_human.cb"
+		Case 1
+			'Randomizer
+			Include "control_randomizer.cb"
+		Case 2
+			'Intelligent
+			Include "control_intelligent.cb"
+		EndSelect
+		If control_place_pawn And CanMakeFlips(Turn, control_pawn_x,control_pawn_y) And Map(control_pawn_x,control_pawn_y) = False Then
+			If (control_pawn_x = 0 Or control_pawn_x = MAP_W-1) And (control_pawn_y = 0 Or control_pawn_y = MAP_H-1) Then
+				part1$ = Iff(control_pawn_y = 0, "North",	"South")
+				part2$ = Iff(control_pawn_x = 0, "West",	"East")
+				NewGameLogRecord(Iff(Turn=1,"White","Black")+" takes "+part1+"-"+part2+" corner.")
+			EndIf
+			MakeFlips(Turn, control_pawn_x,control_pawn_y)
+			Map(control_pawn_x,control_pawn_y)	= Turn
+			Turn								= Iff(Turn=1,2,1)
+			DeleteFreeCell(control_pawn_x,control_pawn_y)
+			dont_play_sound = False
+			If SoundMoveChannel > 0 Then
+				If SoundPlaying(SoundMoveChannel) Then dont_play_sound = True
+			EndIf
+			If Not dont_play_sound Then SoundMoveChannel = Sound(SoundMove)
+		EndIf
+	EndIf
+		
+	//Draw game
+	c = 0
+	CountPawns(0) = 0
+	CountPawns(1) = 0
+	For cell_x = 0 To MAP_W-1
+		For cell_y = 0 To MAP_H-1
+			'Calculate pixel coordinates
+			cell_x_px	= cell_x * CELL_W + MAP_X
+			cell_y_px	= cell_y * CELL_H + MAP_Y
+			
+			'Draw background
+			colour = 128 + (c*-1)*50
+			Color colour, colour, colour
+			Box cell_x_px, cell_y_px, CELL_W,CELL_H
+			Color colour-10,colour-10,colour-10
+			Box cell_x_px,		cell_y_px,		CELL_W,		CELL_H,		OFF	'| Nice looking cell borders
+			Box cell_x_px+1,	cell_y_px+1,	CELL_W-2,	CELL_H-2,	OFF	'|
+			
+			'Draw pawns
+			cell = Map(cell_x,cell_y)
+			If cell Then
+				If (cell = 1 And ImageWhitePawn > 0) Or (cell = 2 And ImageBlackPawn > 0)  Then
+					imgCurrent	= Iff(cell=1, ImageWhitePawn,ImageBlackPawn)
+					imgBefore	= Iff(cell=2, ImageWhitePawn,ImageBlackPawn)
+					animation	= MapAnimation(cell_x,cell_y)
+					If Timer() > animation + PAWN_ANIMATION_DURATION Then
+						'No animation
+						DrawImage imgCurrent, cell_x_px, cell_y_px
+					Else
+						'Do animation
+						percent#= Float(Timer()-animation) / PAWN_ANIMATION_DURATION
+						width	= percent*CELL_W
+						DrawImageBox imgCurrent,	cell_x_px,			cell_y_px,	0,		0,	width,			CELL_H
+						DrawImageBox imgBefore,		cell_x_px+width,	cell_y_px,	width,	0,	CELL_W-width,	CELL_H
+					EndIf
+				Else
+					'Draw a plain black Or white pawn
+					colour = 127 + Int(Iff(cell=1,1,-1))*127
+					Color colour,colour,colour
+					Circle cell_x_px,cell_y_px, (CELL_W+CELL_H)/2
+				EndIf
+				
+				'Count pawns
+				CountPawns(cell-1) = CountPawns(cell-1) + 1
+			EndIf
+			c = Not c
+		Next cell_y
+		c = Not c
+	Next cell_x
+	
+	//Display "cursor"
+	If (Not MenuOpen) And GameOn And MouseY() < MAP_H*CELL_H Then
+		If Not CanMakeFlips(Turn, (MouseX()-MAP_X)/CELL_W, (MouseY()-MAP_Y)/CELL_H) Then
+			Color 255,0,0
+			r = (CELL_W+CELL_H)/2/3
+			x = (MouseX()-MAP_X)/CELL_W*CELL_W + CELL_W/2-r/2 + MAP_X
+			y = (MouseY()-MAP_Y)/CELL_H*CELL_H + CELL_H/2-r/2 + MAP_Y
+			Circle x, y, r
+		EndIf
+		colour = 127 + Int(Iff(Turn=1,1,-1))*127
+		Color colour,colour,colour
+		r = (CELL_W+CELL_H)/2/5
+		x = (MouseX()-MAP_X)/CELL_W*CELL_W + CELL_W/2-r/2 + MAP_X
+		y = (MouseY()-MAP_Y)/CELL_H*CELL_H + CELL_H/2-r/2 + MAP_Y
+		Circle x, y, r
+	EndIf
+	
+	//Update windows
+	UpdateGameLogWindow()
+	UpdatePawnsWindow()
+	UpdateScoresWindow()
+	UpdateFileWindow()
+	UpdateWindows()
+	
+	//Update menus
+	DrawMenus()
+	If IsSelected(OptionQuit) Then
+		//QUIT GAME
+		End
+	ElseIf IsSelected(OptionNewGame) Then
+		//New GAME
+		ResetGame()
+	ElseIf IsSelected(OptionSaveGame) Then
+		//SAVE GAME
+		CallFileSelector(0)
+	ElseIf IsSelected(OptionLoadGame) Then
+		//LOAD GAME
+		CallFileSelector(1)
+	
+	//Select PLAYER 1 Type
+	ElseIf IsSelected(OptionPlayer1Human) Then
+		Player1Type = 0
+		UpdateSettings()
+	ElseIf IsSelected(OptionPlayer1Randomizer) Then
+		Player1Type = 1
+		UpdateSettings()
+	ElseIf IsSelected(OptionPlayer1Intelligent) Then
+		Player1Type = 2
+		UpdateSettings()
+	
+	//Select PLAYER 2 Type
+	ElseIf IsSelected(OptionPlayer2Human) Then
+		Player2Type = 0
+		UpdateSettings()
+	ElseIf IsSelected(OptionPlayer2Randomizer) Then
+		Player2Type = 1
+		UpdateSettings()
+	ElseIf IsSelected(OptionPlayer2Intelligent) Then
+		Player2Type = 2
+		UpdateSettings()
+	
+	//WHAT HAPPENS WHEN PLAYER CANNOT MOVE
+	ElseIf IsSelected(OptionCannotMoveChangeTurn) Then
+		CannotMove = 0
+		UpdateSettings()
+	ElseIf IsSelected(OptionCannotMoveStalemate) Then
+		CannotMove = 1
+		UpdateSettings()
+	ElseIf IsSelected(OptionCannotMoveOpponentWins) Then
+		CannotMove = 2
+		UpdateSettings()
+	ElseIf IsSelected(OptionCannotMoveProsperousWins) Then
+		CannotMove = 3
+		UpdateSettings()
+	
+	//Miscellaneous settings
+	ElseIf IsSelected(OptionShowGameLog) Then
+		ShowGameLog = Not ShowGameLog
+		UpdateSettings()
+	ElseIf IsSelected(OptionShowPawnStats) Then
+		ShowPawnStats = Not ShowPawnStats
+		UpdateSettings()
+	ElseIf IsSelected(OptionShowScores) Then
+		ShowScores = Not ShowScores
+		UpdateSettings()
+	ElseIf IsSelected(OptionResetScores) Then
+		Score(0) = 0
+		Score(1) = 0
+		Score(2) = 0
+		Score(3) = 0
+	ElseIf IsSelected(OptionAnimatedPawns) Then
+		AnimatedPawns = Not AnimatedPawns
+		UpdateSettings()
+	ElseIf IsSelected(OptionCPUWait) Then
+		CPUWait = Not CPUWait
+		UpdateSettings()
+	
+	//Audio
+	ElseIf IsSelected(OptionMuteAudio) Then
+		MuteAudio = Not MuteAudio
+		UpdateSettings()
+	ElseIf IsSelected(OptionPlaySounds) Then
+		SoundsEnabled = Not SoundsEnabled
+		UpdateSettings()
+	ElseIf IsSelected(OptionPlayMusic) Then
+		MusicEnabled = Not MusicEnabled
+		UpdateSettings()
+	ElseIf IsSelected(OptionRepeatSong) Then
+		RepeatSong = Not RepeatSong
+		UpdateSettings()
+	ElseIf IsSelected(OptionChangeSong) Then
+		PlayMusic(True)
+	
+	//Help
+	ElseIf IsSelected(OptionInstructions) Then
+		Execute INSTRUCTIONS_FILE_PATH
+	ElseIf IsSelected(OptionAbout)
+		HideWindow(WindowAbout, OFF)
+	EndIf
+
+	//Play music
+	PlayMusic()
+
+	DrawScreen
+Forever
+
+Function GetMouseHit()
+	If ActiveWindow > 0 Then Return False
+	If MenuOpen Then Return False
+	If MouseHit(1) Then ReTurn 1
+	If MouseHit(2) Then ReTurn 2
+	If MouseHit(3) Then ReTurn 3
+	ReTurn False
+EndFunction
+
+Function IsMouseInCell(cell_x,cell_y)
+	'Calculate pixel coordinates
+	cell_x_px	= cell_x * CELL_W + MAP_X
+	cell_y_px	= cell_y * CELL_H + MAP_Y
+	ReTurn MouseX() >= cell_x_px And MouseX() < cell_x_px+CELL_W And MouseY() >= cell_y_px And MouseY() < cell_y_px+CELL_H
+EndFunction
+
+Function Iff(condition, _true$,_false$)
+	If condition Then ReTurn _true Else ReTurn _false
+EndFunction
+
+Function MakeFlips(player, start_cell_x,start_cell_y)
+	For angle = 0 To 315 Step 45
+		FlipLine(start_cell_x,start_cell_y,angle,player)
+	Next angle
+EndFunction
+
+Function CanMakeFlips(player, start_cell_x,start_cell_y)
+	For angle = 0 To 315 Step 45
+		If LineCanBeFlipped(start_cell_x,start_cell_y,angle,player) Then Return True
+	Next angle
+	Return False
+EndFunction
+
+Function FlipLine(start_cell_x,start_cell_y, angle, player)
+	If Not LineCanBeFlipped(start_cell_x,start_cell_y, angle) Then Return False
+	cell_x		= start_cell_x
+	cell_y		= start_cell_y
+	Repeat
+		cell_x = cell_x + Cos(angle)
+		cell_y = cell_y - Sin(angle)
+		If cell_x < 0 Or cell_x > MAP_W-1 Or cell_y < 0 Or cell_y > MAP_H-1 Then ReTurn False
+		cell = Map(cell_x,cell_y)
+		If cell = player Then Return True
+		Map(cell_x,cell_y) = player
+		If AnimatedPawns Then MapAnimation(cell_x,cell_y) = Timer()
+	Forever
+EndFunction
+
+Function LineCanBeFlipped(start_cell_x,start_cell_y, angle, player=0) '0 means both players
+	cell_x			= start_cell_x
+	cell_y			= start_cell_y
+	start_cell		= Map(start_cell_x, start_cell_y)
+	If start_cell	<> 0 Then ReTurn False
+	Repeat
+		cell_x = cell_x + Cos(angle)
+		cell_y = cell_y - Sin(angle)
+		If cell_x < 0 Or cell_x > MAP_W-1 Or cell_y < 0 Or cell_y > MAP_H-1 Then Return False
+		cell = Map(cell_x,cell_y)
+		If player = 0 And cell > 0 Then player = Iff(cell=1,2,1)
+		If cell = player	Then Return Distance(start_cell_x,start_cell_y, cell_x,cell_y) >= 2
+		If cell = False		Then Return False
+	Forever
+EndFunction
+
+Function CanPlayerMove(player=0) '0 means both players
+	For cell_x = 0 To MAP_W-1
+		For cell_y = 0 To MAP_H-1
+			If CanMakeFlips(player, cell_x,cell_y) Then ReTurn True
+		Next cell_y
+	Next cell_x
+	ReTurn False
+EndFunction
+
+Function ResetGame()
+	UpdateSettings()
+	For cell_x = 0 To MAP_W-1
+		For cell_y = 0 To MAP_H-1
+			Map(cell_x,cell_y) = 0
+		Next cell_y
+	Next cell_x
+	Map(MAP_W/2-1,MAP_H/2-1)= 1
+	Map(MAP_W/2-1,MAP_H/2)	= 2
+	Map(MAP_W/2,MAP_H/2-1)	= 2
+	Map(MAP_W/2,MAP_H/2)	= 1
+	Turn					= 1
+	GameOn					= True
+	EmptyGameLog()
+	BuildFreeCellMap()
+	NewGameLogRecord("Game starts.")
+EndFunction
+
+Function UpdateSettings(save_config=1)
+	p1t	= Player1Type
+	p2t	= Player2Type
+	If p1t			= 0	Then EditOption(OptionPlayer1Human,				"[X] Human")						Else EditOption(OptionPlayer1Human,				"[ ] Human")
+	If p1t			= 1	Then EditOption(OptionPlayer1Randomizer,		"[X] Randomizer")					Else EditOption(OptionPlayer1Randomizer,		"[ ] Randomizer")
+	If p1t			= 2	Then EditOption(OptionPlayer1Intelligent,		"[X] Intelligent")					Else EditOption(OptionPlayer1Intelligent,		"[ ] Intelligent")
+	If p2t 			= 0	Then EditOption(OptionPlayer2Human,				"[X] Human")						Else EditOption(OptionPlayer2Human,				"[ ] Human")
+	If p2t 			= 1	Then EditOption(OptionPlayer2Randomizer,		"[X] Randomizer")					Else EditOption(OptionPlayer2Randomizer,		"[ ] Randomizer")
+	If p2t			= 2	Then EditOption(OptionPlayer2Intelligent,		"[X] Intelligent")					Else EditOption(OptionPlayer2Intelligent,		"[ ] Intelligent")
+	If CannotMove	= 0	Then EditOption(OptionCannotMoveChangeTurn,		"[X] Change turn")					Else EditOption(OptionCannotMoveChangeTurn,		"[ ] Change turn")
+	If CannotMove	= 1	Then EditOption(OptionCannotMoveStalemate,		"[X] Stalemate")					Else EditOption(OptionCannotMoveStalemate,		"[ ] Stalemate")
+	If CannotMove	= 2	Then EditOption(OptionCannotMoveOpponentWins,	"[X] Opponent will win")			Else EditOption(OptionCannotMoveOpponentWins,	"[ ] Opponent will win")
+	If CannotMove	= 3	Then EditOption(OptionCannotMoveProsperousWins,	"[X] Prosperous player will win")	Else EditOption(OptionCannotMoveProsperousWins,	"[ ] Prosperous player will win")
+	If AnimatedPawns	Then EditOption(OptionAnimatedPawns,			"[X] Animated pawns")				Else EditOption(OptionAnimatedPawns,			"[ ] Animated pawns")
+	If MuteAudio		Then EditOption(OptionMuteAudio,				"[X] Mute all")						Else EditOption(OptionMuteAudio,				"[ ] Mute all")
+	If SoundsEnabled	Then EditOption(OptionPlaySounds,				"[X] Play sounds")					Else EditOption(OptionPlaySounds,				"[ ] Play sounds")
+	If MusicEnabled		Then EditOption(OptionPlayMusic,				"[X] Play music")					Else EditOption(OptionPlayMusic,				"[ ] Play music")
+	If RepeatSong		Then EditOption(OptionRepeatSong,				"[X] Repeat song")					Else EditOption(OptionRepeatSong,				"[ ] Repeat song")
+	If CPUWait			Then EditOption(OptionCPUWait,	"[X] CPU waits "+CPU_WAIT_TIME/1000+" seconds")		Else EditOption(OptionCPUWait,					"[ ] CPU waits "+CPU_WAIT_TIME/1000+" seconds")
+	If ShowGameLog Then
+		HideWindow(WindowGameLog, OFF)
+		EditOption(OptionShowGameLog, "[X] Show Game Log")
+	Else
+		HideWindow(WindowGameLog, ON)
+		EditOption(OptionShowGameLog, "[ ] Show Game Log")
+	EndIf
+	If ShowPawnStats Then
+		HideWindow(WindowPawns, OFF)
+		EditOption(OptionShowPawnStats, "[X] Show pawn stats")
+	Else
+		HideWindow(WindowPawns, ON)
+		EditOption(OptionShowPawnStats, "[ ] Show pawn stats")
+	EndIf
+	If ShowScores Then
+		HideWindow(WindowScores, OFF)
+		EditOption(OptionShowScores, "[X] Show scores")
+	Else
+		HideWindow(WindowScores, ON)
+		EditOption(OptionShowScores, "[ ] Show scores")
+	EndIf
+	If save_config Then SaveConfig()
+EndFunction
+
+Function SaveConfig()
+	f = OpenToWrite(CONFIG_FILE_PATH)
+	WriteByte f, Player1Type
+	WriteByte f, Player2Type
+	WriteByte f, ShowGameLog
+	WriteByte f, AnimatedPawns
+	WriteByte f, CPUWait
+	WriteByte f, CannotMove
+	WriteByte f, ShowPawnStats
+	WriteByte f, ShowScores
+	WriteByte f, MuteAudio
+	WriteByte f, SoundsEnabled
+	WriteByte f, MusicEnabled
+	CloseFile f
+EndFunction
+
+Function LoadConfig()
+	If Not FileExists(CONFIG_FILE_PATH) Then Return False
+	f = OpenToRead(CONFIG_FILE_PATH)
+	Player1Type 	= ReadByte(f)
+	Player2Type		= ReadByte(f)
+	ShowGameLog		= ReadByte(f)
+	AnimatedPawns	= ReadByte(f)
+	CPUWait			= ReadByte(f)
+	CannotMove		= ReadByte(f)
+	ShowPawnStats	= ReadByte(f)
+	ShowScores		= ReadByte(f)
+	MuteAudio		= ReadByte(f)
+	SoundsEnabled	= ReadByte(f)
+	MusicEnabled	= ReadByte(f)
+	CloseFile f
+	UpdateSettings(False)
+EndFunction
+
+Function SaveGame(file_path$)
+	f = OpenToWrite(file_path)
+	WriteByte f, Turn-1
+	For cell_x = 0 To MAP_W-1
+		For cell_y = 0 To MAP_H-1
+			WriteByte f, Map(cell_x,cell_y)>0
+			WriteByte f, Map(cell_x,cell_y)=2
+		Next cell_y
+	Next cell_x
+	CloseFile f
+	NewGameLogRecord("Game saved.")
+EndFunction
+
+Function LoadGame(file_path$)
+	ResetGame()
+	f = OpenToRead(file_path)
+	Turn = ReadByte(f) + 1
+	For cell_x = 0 To MAP_W-1
+		For cell_y = 0 To MAP_H-1
+			If EOF(f) Then Return False
+			a = ReadByte(f)
+			b = ReadByte(f)+1
+			Map(cell_x,cell_y) = Iff(a, b, 0)
+		Next cell_y
+	Next cell_x
+	CloseFile f
+	EmptyGameLog()
+	NewGameLogRecord("Game loaded.")
+EndFunction
+
+Function EmptyGameLog()
+	CountGameLogRecords = 0
+	For gl.GameLog = Each GameLog
+		Delete gl
+	Next gl
+EndFunction
+
+Function NewGameLogRecord(record$, bring_visible=0)
+	CountGameLogRecords + 1
+	While CountGameLogRecords > COUNT_GAME_LOG_RECORDS_MAX
+		Delete First(GameLog)
+		CountGameLogRecords-1
+	Wend
+	gl.GameLog	= New(GameLog)
+	gl\record	= Time()+" "+record
+	If bring_visible And WindowVisible(WindowGameLog)=False Then
+		HideWindow(WindowGameLog,OFF)
+		PositionWindow(WindowGameLog, -200,WindowY(WindowGameLog))
+		MoveWindow(WindowGameLog, ScreenWidth()/2-WindowW(WindowGameLog)/2,WindowY(WindowGameLog), 10,True)
+	EndIf
+EndFunction
+
+Function UpdateGameLogWindow()
+	DrawToWindow(WindowGameLog)
+	Color 0,0,0
+	i=0
+	For gl.GameLog = Each GameLog
+		Text 0, YCoordinateFactor*i, gl\record
+		i+12
+	Next gl
+	DrawToScreen
+EndFunction
+
+Function UpdatePawnsWindow()
+	DrawToWindow(WindowPawns)
+	Color 0,0,0
+	Text 0,	0,						"White: "+CountPawns(0)
+	Text 0,	12*YCoordinateFactor,	"Black: "+CountPawns(1)
+	Text 0, 30*YCoordinateFactor,	"Total: "+(CountPawns(0)+CountPawns(1))
+	Text 0, 42*YCoordinateFactor,	"Empty: "+((MAP_W*MAP_H)-(CountPawns(0)+CountPawns(1)))
+	DrawToScreen
+EndFunction
+
+Function UpdateScoresWindow()
+	DrawToWindow(WindowScores)
+	Color 0,0,0
+	Text 0,	0,						" White: "+Score(0)
+	Text 0,	12*YCoordinateFactor,	" Black: "+Score(1)
+	Text 0,	30*YCoordinateFactor,	" Draws: "+Score(2)
+	Text 0,	42*YCoordinateFactor,	"Stales: "+Score(3)
+	DrawToScreen
+EndFunction
+
+Function LoadMusicList()
+	If Not IsDirectory(MUSIC_DIRECTORY) Then Return False
+	old_dir$ = CurrentDir()
+	ChDir MUSIC_DIRECTORY
+	StartSearch
+	CountMusics = 0
+	Repeat
+		file_name$	= FindFile()
+		extension$	= Lower(str(GetFileExtension(file_name)))
+		For i = 0 To COUNT_MUSIC_FORMATS-1
+			If Lower(MusicFormats(i)) = extension Then
+				m.Music = New(Music)
+				m\file_path = MUSIC_DIRECTORY+file_name
+				CountMusics + 1
+			EndIf
+		Next i
+	Until file_name = ""
+	EndSearch
+	ChDir old_dir
+EndFunction
+
+Function GetFileExtension(file_name$)
+	If Not InStr(file_name,".") Then Return ""
+	Return GetWord(file_name, int(CountWords(file_name,".")), ".")
+EndFunction
+
+Function PlayMusic(change_song=0)
+	If MuteAudio Or (Not MusicEnabled) Then
+		If MusicChannel Then StopSound MusicChannel
+		Return False
+	EndIf
+	If (Not SoundPlaying(MusicChannel)) Or (Timer() > TimerMusicPlayingStarted + MAX_MUSIC_PLAY_TIME And RepeatSong=False) Or change_song Then
+		If MusicChannel And (RepeatSong=False Or change_song) Then StopSound MusicChannel 'Some musics Repeat playing While New music already starts so stop the old music even that it should already be stopped.
+		If RepeatSong And CurrentMusicName <> "" And change_song=False Then
+			MusicChannel = PlaySound(CurrentMusicName)
+		Else
+			select_again:
+			index	= Rand(1,CountMusics)
+			i		= 0
+			For m.Music = Each Music
+				i+1
+				If i=index Then
+					If m\file_path = CurrentMusicName And CountMusics > 1 Then Goto select_again
+					CurrentMusicName= m\file_path
+					MusicChannel	= PlaySound(CurrentMusicName)
+					TimerMusicPlayingStarted = Timer()
+					Exit
+				EndIf
+			Next m
+		EndIf
+	EndIf
+EndFunction
+
+Function Sound(snd)
+	If (Not MuteAudio) And SoundsEnabled Then Return PlaySound(snd)
+	Return False
+EndFunction
+
+Function UpdateFileWindow()
+	DrawToWindow(WindowFile)
+	List(LIST_FILES, 2,2, WINDOW_FILE_W-4,WINDOW_FILE_H-30, ON,ON, WindowFile)
+	If ListSelectionChanged(LIST_FILES) Then InputFileName = SetText(GetListSelection(LIST_FILES))
+	y = WINDOW_FILE_H-20
+	Color 0,0,0
+	Text 2,y*YCoordinateFactor, "File name:"
+	key = GetKey()
+	If InputFileName = "" Then
+		InputFileName = "1000"
+	ElseIf Left(InputFileName,1) <> "1" Then
+		InputFileName = "1"+Right(InputFileName,Len(InputFileName)-1)
+	EndIf
+	InputFileName = Inputfield(key, 95,y, WINDOW_FILE_W-142, 15, InputFileName, "", WindowFile)
+	If CmdButton(Iff(FileSelectorMode, "Open","Save"), WINDOW_FILE_W-42,y, 40,15, WindowFile) Or KeyHit(cbKeyReturn) Then
+		If FileExists(Str(GetText(InputFileName))) Or FileExists(Str(GetText(InputFileName)+".flp")) Or FileSelectorMode = 0 Then
+			CurrentGameSaveName = GetText(InputFileName)
+			If Lower(Right(CurrentGameSaveName,4)) <> ".flp" Then CurrentGameSaveName + ".flp"
+			InputFileName = SetText(CurrentGameSaveName)
+			Select FileSelectorMode
+			Case 0
+				'Save file
+				SaveGame(CurrentGameSaveName)
+			Case 1
+				'Load file
+				LoadGame(CurrentGameSaveName)
+			EndSelect
+			MoveWindow(WindowFile, ScreenWidth()+5, WindowY(WindowFile))
+		EndIf
+	EndIf
+	DrawToScreen
+EndFunction
+
+Function CallFileSelector(mode)
+	//Mode: 0 - save    1 - open
+	FileSelectorMode = mode
+	title$ = Iff(FileSelectorMode,"Open file","Save file")
+	If title <> WindowTitle(WindowFile) Then ChangeWindowTitle(WindowFile, 0,0,0, False, title)
+	PositionWindow(WindowFile, -WINDOW_FILE_W-5,WindowY(WindowFile))
+	MoveWindow(WindowFile, ScreenWidth()/2-WINDOW_FILE_W/2, WindowY(WindowFile))
+	FetchGameSaves()
+EndFunction
+
+Function FetchGameSaves()
+	FormatList(LIST_FILES)
+	StartSearch
+	Repeat
+		file_name$ = FindFile()
+		If GetFileExtension(file_name) = "flp" Then AddListItem(LIST_FILES, file_name, file_name = CurrentGameSaveName)
+	Until file_name = ""
+	EndSearch
+EndFunction
+
+Function DeleteFreeCell(cell_x,cell_y)
+	fc.FreeCell = MapFreeCell(cell_x,cell_y)
+	Delete fc
+	MapFreeCell(cell_x,cell_y) = 0
+	CountFreeCells - 1
+EndFunction
+
+Function BuildFreeCellMap()
+	//First remove all existing free cells
+	For fc.FreeCell = Each FreeCell
+		MapFreeCell(fc\cell_x,fc\cell_y) = 0
+		Delete fc
+	Next fc
+	CountFreeCells = 0
+	
+	//Then go through map And add those cells that are free
+	For cell_x = 0 To MAP_W-1
+		For cell_y = 0 To MAP_h-1
+			If Not Map(cell_x,cell_y) Then
+				fc							= New(FreeCell)
+				fc\cell_x					= cell_x
+				fc\cell_y					= cell_y
+				MapFreeCell(cell_x,cell_y)	= ConvertToInteger(fc)
+				CountFreeCells + 1
+			EndIf
+		Next cell_y
+	Next cell_x
+EndFunction

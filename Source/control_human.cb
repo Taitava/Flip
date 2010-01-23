@@ -1,0 +1,12 @@
+control_place_pawn	= False
+control_pawn_x		= 0
+control_pawn_y		= 0
+If GetMouseHit() Then
+	If MouseX() >= MAP_X And MouseX() < MAP_X+MAP_W*CELL_W Then
+		If MouseY() >= MAP_Y And MouseY() < MAP_Y+MAP_H*CELL_H Then
+			control_place_pawn	= True
+			control_pawn_x		= (MouseX()-MAP_X)/CELL_W
+			control_pawn_y		= (MouseY()-MAP_Y)/CELL_H
+		EndIf
+	EndIf
+EndIf

@@ -1,0 +1,1146 @@
+//Janelas
+//Ver 1.0
+//By: Jarkko 'Jare' Linnanvirta (jare1@mbnet.fi / kpelit2003@hotmail.com), K-pelit (http://www.kpelit.net /
+//Janelas-kotisivu: http://www.janelas.urli.net / http://koti.mbnet.fi/jare1/janelas/
+
+'Janelas on CoolBasic:lle kehitetty ikkunamoottori, jolla on mahdollista luoda ohjelmiin
+'useita erilaisia ikkunoita, joihin voi piirtää CoolBasic:n piirtokomennoilla ja joita
+'käyttäjän on mahdollista raahata ja pienentää hiirellä. Lue Ohje.html.
+'
+'Ominaisuuksia:
+'-Tuki todella monelle ikkunalle (ikkunoiden maksimimäärää voi säätää)
+'-Ikkunaan voi piirtää millä tahansa CoolBasic:n piirtokomennolla
+'-Mahdollisuus jätää ikkunan kehys piirtämättä, jolloin näytetään pelkkä sisältö
+'-Tuki läpinäkyville ikkunoille (jolloin tausta on läpinäkyvä. Läpikuultavuus taas ei ole mahdollista)
+'-Ikkunoiden ominaisuuksia voi muuttaa kesken kaiken
+'-Mahdollisuus pienentää ikkunat otsikkopalkin kokoisiksi (klikkaamalla otsikkopalkkia hiiren oikealla)
+'-Hiiren koordinaattien selvittäminen kussakin ikkunassa funktioiden avulla
+'-Ikkunan värien valitseminen ikkunakohtaisesti
+'-Ikkunan otsikkopalkki on mahdollista sijoittaa myös ikkunan alalaitaan - mahdollistaa pinennettyjen
+' ikkunoiden järkevän sijoittamisen myös pääikkunan alalaitaan, josta ne saa kätevästi suurennettua.
+'
+'Janelas on myös osa CoolBasic Software Development Kit:ä, mikä tarkoittaa sitä, että tämän ilmaisen
+'SDK:n omaavat voivat esimerkiksi päivittää Janelas-moottorinsa muutamalla hiiren klikkauksella
+'SDK Control Center -ohjelmasta. Lisäksi SDK:n mukana tulee tottakai paljon muuta hyödyllistä ja
+'kiintoisaa materiaalia CoolBasic:iin.
+'CB SDK:n osoite: http://koti.mbnet.fi/cbsdk/
+
+
+//Muuttujat
+    'Yleiset
+        Const WindowsNoMax = 20 'kuinka paljon ikkunoita voi olla korkeintaan
+        Global WindowsNoCreated 'kuinka monta ikkunaa on yhteensä luotu
+        Global WindowsNo 'kuinka monta ikkunaa on olemassa
+        Global ActiveWindow 'sisältää aktiivisen ikkunan id:n
+        Global ActiveWindowMethod 'Sisältää tiedon siitä, millä tavalla moottori antaa käyttäjän aktivoida ikkunoita. 0: Riittää, että hiiri on ikkunan päällä. 1: Hiirellä on KLIKATTAVA ikkunaa
+        ActiveWindowMethod = 1 'oletusarvo
+        Global MouseOnWindow 'Sisältää sen ikkunan id:n, jonka päällä hiiri on
+        
+        Global YCoordinateFactor
+        'Haetaan YCoordinateFactor:lle arvo
+        temp = MakeImage(10,40)
+        DrawToImage temp
+        Color 255,0,0
+        Text 0,-20, "L"
+        DrawToScreen
+        PickImageColor temp,1,20
+        r=getRGB(RED)
+        If r>0 Then YCoordinateFactor=1 :End Else YCoordinateFactor=-1
+        DeleteImage temp
+        
+    'Ikkunataulukot
+        Dim WindowX(WindowsNoMax) 'ikkunoiden koordinaatit
+        Dim WindowY(WindowsNoMax) '--||--
+        Dim WindowW(WindowsNoMax) As Short 'ikkunoiden mittasuhteet
+        Dim WindowH(WindowsNoMax) As Short '--||--
+        Dim WindowTitle(WindowsNoMax) As String 'ikkunoiden otsikot
+        Dim WindowTitleFont(WindowsNoMax) 'ikkunoiden otsikoiden fontit
+        Dim WindowExists(WindowsNoMax) As Byte 'mitkä ikkunat ovat olemassa (true=olemassa, false=ei olemassa)
+        Dim WindowContents(WindowsNoMax) 'tavalliset kuvat jokaisen ikkunan sisällöstä
+        Dim WindowHeadbar(WindowsNoMax,7) 'ikkunoiden otsikkopalkin kuvat
+        Dim WindowHeadbarThickness(WindowsNoMax) as short 'ikkunan otsikkopalkin paksuus. Jos nolla, niin koko reunusta ei piirretä
+        Dim WindowsDrawOrder(WindowsNoMax) 'ikkunoiden id:t lajiteltuina piirtojärjestykseen - ensimmäisellä sijalla oleva piirretään taakse jne.
+        Dim WindowOpen(WindowsNoMax) as byte 'mitkä ikkunat ovat avoinaisia (true=auki)
+        Dim WindowTransparency(WindowsNoMax) As Byte 'mitkä ikkunat ovat taustaltaan läpinäkyviä (True=läpinäkyvä)
+        Dim WindowHeadbarPlace(WindowsNoMax) As Byte 'sisältää tiedon, sijoitetaanko ikkunan otsikkopalkki ylös vai alas (0=ylös, 1=alas)
+        Dim WindowVisible(WindowsNoMax) As Byte 'mitkä ikkunat näytetään (true) ja mitkä ei (false)
+        Dim WindowLocked(WindowsNoMax) As Byte 'mitkä ikkunat ovat lukittu(=käyttäjä ei voi esim. raahata niitä)
+        Dim WindowBorderThickness(WindowsNoMax) As Short 'Ikkunan kehyksen paksuus
+        Dim WindowMoveToX(WindowsNoMax) 'Koordinaatit, joihin ikkunoiden on käsketty liikkua
+        Dim WindowMoveToY(WindowsNoMax) '--||--
+        Dim WindowMoveSpeed(WindowsNoMax) As short 'Ikkunan liikkumisnopeus. Jos 0, ei liikuta minnekkään.
+        Dim WindowMoveSmoothStop(WindowsNoMax) As Byte 'Hidastetaanko ikkunan liikkumista juuri ennen liikkeen päättymistä (True) vai ei (False).
+        Dim WindowHeadbarUsersImage(WindowsNoMax,3) 'Ohjelmoijan määrittämä vapaavalintainen kuva, jota käytetään ikkunan otsikkopalkissa
+        Dim WindowFieldW(WindowsNoMax) As Short 'Ikkunan vieritettävän alan ulottuvuudet
+        Dim WindowFieldH(WindowsNoMax) As Short '--||--
+        Dim WindowFieldScrollbar(WindowsNoMax) As Byte 'Käytetäänkö ikkunan kameran vierittämisessä vierityspalkkia
+        Dim WindowCameraX(WindowsNoMax) As Short 'Ikkunan kameran koordinaatit
+        Dim WindowCameraY(WindowsNoMax) As Short '--||--
+        Dim WindowCameraUsed(WindowsNoMax) As Byte 'käytetäänkö ikkunassa sen omia mittoja suurempaa kuvaa, eli käytetäänkö skrollausta.
+        Dim WindowCameraFollow(WindowsNoMax,2) '0:Objekti,jota seurataan,1:x-muutos,2:y-muutos
+        
+        'Värit
+            Dim WindowColorBorder(WindowsNoMax,2) As Byte 'ikkunan reunuksen väri
+            Dim WindowColorHeadbar(WindowsNoMax,1,2) As Byte 'ikkunan otsikkopalkin liukuväri
+            Dim WindowColorActiveBorder(WindowsNoMax,2) 'ikkunan reunuksen väri kun ikkuna ON aktiivinen
+            Dim WindowColorActiveHeadbar(WindowsNoMax, 1,2) 'ikkunan otsikkopalkin liukuväri kun ikkuna ON aktiivinen
+            Dim WindowColorBackground(WindowsNoMax,2) 'ikkunan taustaväri
+            Dim WindowColorTitle(WindowsNoMax,2) 'ikkunan otsikkotekstin väri
+            
+            Dim WindowDefaultColorBorder(2) As Byte 'ikkunan reunuksen oletusväri
+            Dim WindowDefaultColorHeadbar(1,2) As Byte 'ikkunan otsikkopalkin oletusliukuväri
+            Dim WindowDefaultColorActiveBorder(2) 'ikkunan reunuksen oletusväri kun ikkuna ON aktiivinen
+            Dim WindowDefaultColorActiveHeadbar(1,2) 'ikkunan otsikkopalkin oletusliukuväri kun ikkuna ON aktiivinen
+            Dim WindowDefaultColorBackground(2) 'ikkunan oletustaustaväri
+            Dim WindowDefaultColorTitle(2) 'ikkunan otsikkotekstin oletusväri
+            FormatWindowsDefaultColors() 'asetetaan ikkunoille siniset värit
+            
+    'Vakioparametrit
+        Global ALL_WINDOWS : ALL_WINDOWS=-3 'Joissakin funktioissa tällä voidaan viitata jokaikiseen ikkunaan.
+                                            'Tälläisten funktioiden kohdalla on merkintä, että funktiossa on
+                                            'mahdollista käyttää tätä muuttujaa parametrina.
+                                            'Laitettu vakion sijaan muuttujaksi cb:n syntaksibugin vuoksi, joka
+                                            'vaatii laittamaan vakiot joissakin tilanteissa sulkeisiin.
+                                            
+        Global NEW_WINDOWS : NEW_WINDOWS=-4 'Tällä voidaan viitata käytön jälkeen luotaviin ikkunoihin
+                             
+        Const HEADBAR_TOP=0     'Otsikkopalkin sijoittaminen ikkunan yläosaan
+        Const HEADBAR_BOTTOM=1  'Otsikkopalkin sijoittaminen ikkunan alaosaan.
+        Const HEADBAR_OFF = 0   'Ei otsikkopalkkia eikä kehystä
+        Const WINDOW_OPEN=1     'Ikkuna täysikokoisena
+        Const WINDOW_OFF=0      'Ikkuna pienennettynä otsikkopalkinkokoiseksi
+        
+    'Virheet
+        Global TOO_MANY_WINDOWS 'jos true, yritetään ikkunoita luoda liian paljon
+        Global WINDOW_DOES_NOT_EXIST 'jos true, yritetään viitata olemattomaan ikkunaan
+        
+    'Väliaikaiset (joiden arvon on kuitenkin säilyttävä hieman tavallisia väliaikaisia muuttujia pitempään)
+        Global hiirixerotus 'hiiren ja ikkunan x-koordinaattien erotus
+        Global hiiriyerotus 'hiiren ja ikkunan y-koordinaattien erotus
+        Global liikutaikkunaa : liikutaikkunaa=-1 'raahattavan ikkunan id
+
+    
+//Funktiot
+
+    Function NewWindow(otsikko$,x,y,w,h,kehyksenpaksuus=3,palkinpaksuus=20,palkinsijoitus=0,auki=1)
+        //Luo uuden ikkunan muistiin
+        //Palauttaa luotuun ikkunaan viittaavan id-numeron
+        //Mikäli ikkunaa ei voitu luoda ikkunoiden määrän rajan täytyttyä, palautetaan -1 ja
+         'TOO_MUCH_WINDOWS-muuttujan arvoksi asetetaan true
+        //Ikkunat piirretään UpdateWindows()-funktiolla
+        
+        
+        //Haetaan uudelle ikkunalle id, jota ei vielä ole käytetty
+            For i = 1 To WindowsNoMax
+                If Not WindowExists(i) Then id=i : Exit
+            Next i
+            If id=0 Then TOO_MUCH_WINDOWS=True : Return-1 'virhe, sillä kaikki ikkunapaikat on jo käytetty
+        
+        //Asetetaan arvot taulukoihin
+            WindowX(id)=x : WindowY(id)=y
+            WindowW(id)=w : WindowH(id)=h
+            WindowTitle(id)=otsikko
+            WindowHeadbarThickness(id)=palkinpaksuus
+            WindowExists(id)=True
+            WindowContents(id)=MakeImage(w,h)
+            WindowOpen(id)=auki
+            WindowHeadbarPlace(id)=palkinsijoitus
+            WindowsNoCreated+1
+            WindowsNo+1
+            WindowVisible(id)=True
+            WindowLocked(id)=False
+            WindowBorderThickness(id) = kehyksenpaksuus
+            WindowMoveSpeed(id) = 0
+            WindowFieldW(id) = w
+            WindowFieldH(id) = h
+            WindowFieldScrollbar(id) = False
+            WindowCameraX(id) = 0
+            WindowCameraY(id) = 0
+            WindowCameraUsed(id) = False
+            
+            'Värit
+                WindowColorBorder(id,0) = WindowDefaultColorBorder(0)
+                WindowColorBorder(id,1) = WindowDefaultColorBorder(1)
+                WindowColorBorder(id,2) = WindowDefaultColorBorder(2)
+                WindowColorActiveBorder(id,0) = WindowDefaultColorActiveBorder(0)
+                WindowColorActiveBorder(id,1) = WindowDefaultColorActiveBorder(1)
+                WindowColorActiveBorder(id,2) = WindowDefaultColorActiveBorder(2)
+                WindowColorHeadbar(id,0,0) = WindowDefaultColorHeadbar(0,0)
+                WindowColorHeadbar(id,0,1) = WindowDefaultColorHeadbar(0,1)
+                WindowColorHeadbar(id,0,2) = WindowDefaultColorHeadbar(0,2)
+                WindowColorHeadbar(id,1,0) = WindowDefaultColorHeadbar(1,0)
+                WindowColorHeadbar(id,1,1) = WindowDefaultColorHeadbar(1,1)
+                WindowColorHeadbar(id,1,2) = WindowDefaultColorHeadbar(1,2)
+                WindowColorActiveHeadbar(id,0,0) = WindowDefaultColorActiveHeadbar(0,0)
+                WindowColorActiveHeadbar(id,0,1) = WindowDefaultColorActiveHeadbar(0,1)
+                WindowColorActiveHeadbar(id,0,2) = WindowDefaultColorActiveHeadbar(0,2)
+                WindowColorActiveHeadbar(id,1,0) = WindowDefaultColorActiveHeadbar(1,0)
+                WindowColorActiveHeadbar(id,1,1) = WindowDefaultColorActiveHeadbar(1,1)
+                WindowColorActiveHeadbar(id,1,2) = WindowDefaultColorActiveHeadbar(1,2)
+                WindowColorBackground(id,0) = WindowDefaultColorBackground(0)
+                WindowColorBackground(id,1) = WindowDefaultColorBackground(1)
+                WindowColorBackground(id,2) = WindowDefaultColorBackground(2)
+                WindowColorTitle(id,0) = WindowDefaultColorTitle(0)
+                WindowColorTitle(id,1) = WindowDefaultColorTitle(1)
+                WindowColorTitle(id,2) = WindowDefaultColorTitle(2)
+                
+                
+        //Luodaan ikkunalle otsikkopalkki
+            MakeWindowHeadbar(id)
+        
+        //Asetetaan ikkuna piirtojärjestystaulukkoon
+            WindowsDrawOrder(Int(Min(WindowsNoCreated,WindowsNoMax))) = id
+            
+        Return id
+        
+    End Function
+    
+    
+    
+    Function UpdateWindows()
+        //Päivittää ja piirtää kaikki ikkunat
+                        
+        //Alkusäädöt
+            DrawToScreen 'Varmistetaan piirtokomentojen ohjautuvan näytölle
+            GetActiveWindow() 'Haetaan aktiivinen ikkuna ActiveWindow-muuttujaan (global)
+
+            'nollataan virhemuuttujat
+            TOO_MANY_WINDOWS = False
+            WINDOW_DOES_NOT_EXIST = False
+    
+        //Käydään ikkunat läpi
+            For i = 1 To Min(WindowsNoMax, WindowsNoCreated)
+
+                id = WindowsDrawOrder(i)
+                
+                If WindowExists(id) And WindowVisible(id)=True Then
+                
+                    //Liikutetaan ikkunaa, jos niin on käsketty MoveWindow()-funktiolla
+                        If WindowMoveSpeed(id)>0 Then
+                            x1# = WindowX(id)
+                            y1# = WindowY(id)
+                            x2# = WindowMoveToX(id)
+                            y2# = WindowMoveToY(id)
+                            dir = GetAngle(x1,y1, x2,y2)
+                            dist = Distance(x1,y1, x2,y2)
+                            If dist < WindowMoveSpeed(id)*5 And dist>0 And WindowMoveSpeed(id)>1 And WindowMoveSmoothStop(id)=ON
+                                WindowMoveSpeed(id) = WindowMoveSpeed(id)-WindowMoveSpeed(id)/3
+                            End If
+                            xMuutos# = Cos(dir)*WindowMoveSpeed(id)
+                            yMuutos# = -Sin(dir)*WindowMoveSpeed(id)
+                            If x1+xMuutos > x2 And xMuutos>0 Then xMuutos = x2-x1
+                            If x1+xMuutos < x2 And xMuutos<0 Then xMuutos = x2-x1
+                            If y1+yMuutos > y2 And yMuutos>0 Then yMuutos = y2-y1
+                            If y1+yMuutos < y2 And yMuutos<0 Then yMuutos = y2-y1
+                            
+                            WindowX(id) = x1 + xMuutos
+                            WindowY(id) = y1 + yMuutos
+                            If WindowX(id) = WindowMoveToX(id) And WindowY(id) = WindowMoveToY(id) Then WindowMoveSpeed(id) = 0
+                        End If
+                        
+                    //Suoritetaan automaattinen kameran vieritys
+                        obj=WindowCameraFollow(id,0)
+                        If obj>0 Then
+                            xmuutos=WindowCameraFollow(id,1)
+                            ymuutos=WindowCameraFollow(id,2)
+                            WindowCameraX(id)=min(Max(WorldXOnScreen(ObjectX(obj)+xmuutos)-WindowW(id)/2,0),WindowFieldW(id)-WindowW(id))
+                            WindowCameraY(id)=min(Max(WorldYOnScreen(ObjectY(obj)+ymuutos)-WindowH(id)/2,0),WindowFieldH(id)-WindowW(id))
+                        End If
+                
+                    //Lyhennetään joitakin muuttujia
+                        x=WindowX(id):y=WindowY(id):w=WindowW(id):h=WindowH(id)
+                        palkinpaksuus=WindowHeadbarThickness(id)
+                    
+                    //Piirretään ikkuna
+                        DrawWindow(id)
+                    
+                    
+                    //Ikkunan komentaminen hiirellä
+                        'Ikkunan liikkuminen päivittyy näytöllä vasta kun UpdateWindows()-funktiota
+                        'kutsutaan seuraavan kerran
+                        'Ikkunan liikuttaminen on mahdotonta, mikäli ikkunassa ei ole kehystä
+                        
+                        If palkinpaksuus>0 And WindowLocked(id)=False And WindowMoveSpeed(id)=0 Then
+                            If (MouseX()=>x And MouseX()<=x+w) Or liikutaikkunaa=id Then
+                                palkinsijaintimuutos1=(palkinpaksuus+h)*WindowHeadbarPlace(id) 'jos otsikkopalkki sijaitsee ikkunan alapuolella, siirretään havaintoaluettakin alaspäin
+                                palkinsijaintimuutos2=(palkinpaksuus+WindowH(id))*WindowHeadbarPlace(id)
+                                If (MouseY()=>y-WindowBorderThickness(id)-palkinpaksuus+palkinsijaintimuutos1 And MouseY()<=y-WindowBorderThickness(id)+palkinsijaintimuutos2) Or liikutaikkunaa=id Then
+                                    'Hiiri on ikkunan yläpalkin kohdalla
+                                    
+                                    'Ikkunan raahaaminen alkaa
+                                        If Mousehit(1) And liikutaikkunaa=-1 and ActiveWindow=id Then
+                                            hiirixerotus=MouseX()-x
+                                            hiiriyerotus=MouseY()-y
+                                            liikutaikkunaa=id
+                                        End If
+                                    
+                                    'Raahaaminen jatkuu
+                                        If liikutaikkunaa=id Then
+                                            WindowX(id)=MouseX()-hiirixerotus
+                                            WindowY(id)=MouseY()-hiiriyerotus
+                                        End If
+                                    
+                                    'Lopetetaan raahaaminen
+                                        If Not MouseDown(1) Then
+                                            hiirixerotus=0
+                                            hiiriyerotus=0
+                                            liikutaikkunaa=-1
+                                        End If
+                                    
+                                    'Ikkunan pienentäminen/suurentaminen
+                                        If MouseHit(2) And ActiveWindow=id Then
+                                            If WindowOpen(id) Then
+                                                WindowOpen(id) = False
+                                            Else
+                                                WindowOpen(id) = True
+                                                nostaikkuna=id 'merkitään ikkuna nostettavaksi ylimmäiseksi
+                                            End If
+                                            ClearMouse
+                                        End If
+                                    
+                                End If
+                            End If
+
+                            'Nostetaan ikkuna ylimmäiseksi kun sitä klikataan
+                            If ActiveWindow=id And MouseHit(1) Then nostaikkuna=id
+                        End If
+                    
+                End If
+            Next i
+            
+            If nostaikkuna>0 Then SetWindowTopmost(nostaikkuna)
+            
+    End Function
+    
+    Function DrawToWindow(id,pyyhkiminen=1)
+        //Asettaa CoolBasic:n piirtokäskyt vaikuttamaan haluttuun ikkunaan
+        //Piirtääksesi jälleen ruudulle, käytä DrawToScreen-komentoa
+        //Funktio tyhjentää automaattisesti ikkunan aiemman sisällön - estääksesi
+        //tämän anna valinnaisena parametrina id:n jälkeen OFF
+    
+        If WindowExists(id) Then
+            DrawToImage WindowContents(id)
+            
+            If pyyhkiminen=1 Then
+                If WindowTransparency(id) Then
+                    r = 255 'oletamme Magentan olevan kuvien oletustaustaväri
+                    g = 0
+                    b = 255
+                Else
+                    r = WindowColorBackground(id,0)
+                    g = WindowColorBackground(id,1)
+                    b = WindowColorBackground(id,2)
+                End If
+                Color r,g,b
+                Box 0,0, WindowFieldW(id), WindowFieldH(id)
+            End If
+        Else
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+    End Function
+    
+    Function SetWindowTopmost(id)
+        //Muuttaa ikkunoiden piirtojärjestystä niin, että haluttu ikkuna
+        //piirretään päällimäiseksi
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        
+        If id = WindowsDrawOrder(int(Min(WindowsNoMax, WindowsNoCreated))) Then Return False 'ikkuna ON jo ylinnä
+
+        For i = 1 To Min(WindowsNoMax, WindowsNoCreated)
+            If WindowsDrawOrder(i) = id Then kohta = i 'selvitetään, missä kohtaa piirtojärjestystä ko. ikkuna aluksi on
+        Next i
+                
+        For i = kohta To Min(WindowsNoMax, WindowsNoCreated)
+            WindowsDrawOrder(i) = WindowsDrawOrder(i+1)
+        Next i
+        WindowsDrawOrder(int(Min(WindowsNoMax, WindowsNoCreated)))=id
+                
+    End Function
+    
+    Function MouseXInWindow(id)
+        //Kertoo hiiren x-koordinaatin halutun ikkunan vasemmasta reunasta mitattuna
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        Return MouseX()-WindowX(id)+WindowCameraX(id)
+    End Function
+    
+    Function MouseYInWindow(id)
+        //Kertoo hiiren y-koordinaatin halutun ikkunan yläreunasta mitattuna
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        Return MouseY()-WindowY(id)+WindowCameraY(id)
+    End Function
+    
+    Function ScreenXInWindow(id,x)
+        //Muuntaa näytöllä olevan x-koordinaatin x-koordinaatiksi halutussa ikkunassa
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        Return x-WindowX(id)+WindowCameraX(id)
+    End Function
+    
+    Function ScreenYInWindow(id,y)
+        //Muuntaa näytöllä olevan y-koordinaatin y-koordinaatiksi halutussa ikkunassa
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        Return y-WindowY(id)+WindowCameraY(id)
+    End Function
+    
+    Function WindowXOnScreen(id,x)
+        //Muuntaa ikkunassa olevan x-koordinaatin x-koordinaatiksi näytöllä
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        Return WindowX(id)+x-WindowCameraX(id)
+    End Function
+    
+    Function WindowYOnScreen(id,y)
+        //Muuntaa ikkunassa olevan y-koordinaatin y-koordinaatiksi näytöllä
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        Return WindowY(id)+y-WindowCameraY(id)
+    End Function
+    
+    Function FormatWindowsDefaultColors()
+        //Alustaa värit, joita käytetään uusissa ikkunoissa
+
+        WindowDefaultColorBorder(0)=0
+        WindowDefaultColorBorder(1)=128
+        WindowDefaultColorBorder(2)=192
+
+        WindowDefaultColorActiveBorder(0)=0
+        WindowDefaultColorActiveBorder(1)=64
+        WindowDefaultColorActiveBorder(2)=128
+        
+        WindowDefaultColorHeadbar(0,0)=0
+        WindowDefaultColorHeadbar(0,1)=0
+        WindowDefaultColorHeadbar(0,2)=255
+        WindowDefaultColorHeadbar(1,0)=0
+        WindowDefaultColorHeadbar(1,1)=128
+        WindowDefaultColorHeadbar(1,2)=192
+        
+        WindowDefaultColorActiveHeadbar(0,0)=0
+        WindowDefaultColorActiveHeadbar(0,1)=0
+        WindowDefaultColorActiveHeadbar(0,2)=128
+        WindowDefaultColorActiveHeadbar(1,0)=0
+        WindowDefaultColorActiveHeadbar(1,1)=64
+        WindowDefaultColorActiveHeadbar(1,2)=128
+        
+        WindowDefaultColorBackground(0)=30
+        WindowDefaultColorBackground(1)=50
+        WindowDefaultColorBackground(2)=150
+        
+        WindowDefaultColorTitle(0)=0
+        WindowDefaultColorTitle(1)=255
+        WindowDefaultColorTitle(2)=255
+    End Function
+    
+    Function SetWindowTransparency(id, tila=1)
+        //Asettaa ikkunan läpinäkyvyyden päälle tai pois
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        
+        WindowTransparency(id)=tila
+    End Function
+    
+    Function GetActiveWindow()
+        //Hakee/antaa käyttäjän asetaa aktiivisen ikkunan.
+
+        GetMouseOnWindow()
+        If ActiveWindowMethod=0 Or (ActiveWindowMethod=1 And (MouseHit(1) Or MouseHit(2))) Then
+            ActiveWindow = MouseOnWindow
+        End If
+        
+    End Function
+    
+    Function ChangeWindowHeadbarColors(id, r1,g1,b1, r2,g2,b2, ra1,ga1,ba1, ra2,ga2,ba2)
+        //Vaihtaa ikkunan yläpalkin liukuväriä (ei-aktiivisen ja aktiivisen palkin liukuväri)
+        //ALL_WINDOWS-vakiolla muutetaan oletusvärejä
+        
+        If id <> ALL_WINDOWS Then
+            //Muutos koskee yksittäistä ikkunaa
+        
+            If Not WindowExists(id) Then
+                WINDOW_DOES_NOT_EXIST=True
+                Return False
+            End If
+            
+            WindowColorHeadbar(id,0,0)=r1
+            WindowColorHeadbar(id,0,1)=g1
+            WindowColorHeadbar(id,0,2)=b1
+            
+            WindowColorHeadbar(id,1,0)=r2
+            WindowColorHeadbar(id,1,1)=g2
+            WindowColorHeadbar(id,1,2)=b2
+            
+            WindowColorActiveHeadbar(id,0,0)=ra1
+            WindowColorActiveHeadbar(id,0,1)=ga1
+            WindowColorActiveHeadbar(id,0,2)=ba1
+            
+            WindowColorActiveHeadbar(id,1,0)=ra2
+            WindowColorActiveHeadbar(id,1,1)=ga2
+            WindowColorActiveHeadbar(id,1,2)=ba2
+            
+            MakeWindowHeadBar(id)
+        End If
+           
+        If id=ALL_WINDOWS Or id=NEW_WINDOWS Then
+            //Muutetaan oletusvärejä
+            
+            WindowDefaultColorHeadbar(0,0)=r1
+            WindowDefaultColorHeadbar(0,1)=g1
+            WindowDefaultColorHeadbar(0,2)=b1
+            
+            WindowDefaultColorHeadbar(1,0)=r2
+            WindowDefaultColorHeadbar(1,1)=g2
+            WindowDefaultColorHeadbar(1,2)=b2
+            
+            WindowDefaultColorActiveHeadbar(0,0)=ra1
+            WindowDefaultColorActiveHeadbar(0,1)=ga1
+            WindowDefaultColorActiveHeadbar(0,2)=ba1
+            
+            WindowDefaultColorActiveHeadbar(1,0)=ra2
+            WindowDefaultColorActiveHeadbar(1,1)=ga2
+            WindowDefaultColorActiveHeadbar(1,2)=ba2
+        End If
+        
+        If id = ALL_WINDOWS Then
+            //Muutokset kaikkiin ikkunoihin
+            For i = 1 To Min(WindowsNoMax,WindowsNoCreated)
+                ChangeWindowHeadbarColors(i, r1,g1,b1, r2,g2,b2, ra1,ga1,ba1, ra2,ga2,ba2)
+            Next i
+        End If
+        
+    End Function
+    
+    Function ChangeWindowBorderColors(id, r,g,b, ra,ga,ba)
+        //Vaihtaa ikkunan kehyksen väriä (ei-aktiivisen ja aktiivisen kehyksen väri)
+        //ALL_WINDOWS-vakiolla muutetaan oletusvärejä
+        
+        If id <> ALL_WINDOWS And id <> NEW_WINDOWS Then
+            //Muutetaan yksittäisen ikkunan värejä
+                
+            If Not WindowExists(id) Then
+                WINDOW_DOES_NOT_EXIST=True
+                Return False
+            End If
+            
+            WindowColorBorder(id,0)=r
+            WindowColorBorder(id,1)=g
+            WindowColorBorder(id,2)=b
+            
+            WindowColorActiveBorder(id,0)=ra
+            WindowColorActiveBorder(id,1)=ga
+            WindowColorActiveBorder(id,2)=ba
+            
+        End If
+        
+        If id = NEW_WINDOWS Or id = ALL_WINDOWS Then
+            //Muutetaan oletusvärejä
+            
+            WindowDefaultColorBorder(0)=r
+            WindowDefaultColorBorder(1)=g
+            WindowDefaultColorBorder(2)=b
+            
+            WindowDefaultColorActiveBorder(0)=ra
+            WindowDefaultColorActiveBorder(1)=ga
+            WindowDefaultColorActiveBorder(2)=ba
+        End If
+        
+        If id = ALL_WINDOWS Then
+            //Muutokset kaikkiin ikkunoihin
+            For i = 1 To Min(WindowsNoMax,WindowsNoCreated)
+                ChangeWindowBorderColors(i, r,g,b, ra,ga,ba)
+            Next i
+        End If
+        
+    End Function
+    
+    Function ChangeWindowTitle(id, r,g,b, fontti=0, otsikko$="")
+        //Muuttaa ikkunan otsikon väriä, muotoilua ja tekstiä
+        //ALL_WINDOWS-vakiolla muutetaan vain oletusväriä
+        
+        If id <> ALL_WINDOWS Then
+            //Muutetaan yksittäistä ikkunaa
+        
+            If Not WindowExists(id) Then
+                WINDOW_DOES_NOT_EXIST=True
+                Return False
+            End If
+            
+            WindowColorTitle(id,0)=r
+            WindowColorTitle(id,1)=g
+            WindowColorTitle(id,2)=b
+            
+            if fontti <> 0 Then WindowTitleFont(id)=fontti
+            If otsikko<>"" Then WindowTitle(id)=otsikko
+            
+            MakeWindowHeadBar(id)
+        End If
+        
+        If id=ALL_WINDOWS Or id=NEW_WINDOWS Then
+            //Muutetaan oletusväriä
+            
+            WindowDefaultColorTitle(0) = r
+            WindowDefaultColorTitle(1) = g
+            WindowDefaultColorTitle(2) = b
+        End If
+        
+        If id = ALL_WINDOWS Then
+            //Muutokset kaikkiin ikkunoihin
+            For i = 1 To Min(WindowsNoMax,WindowsNoCreated)
+                ChangeWindowTitle(i, r,g,b)
+            Next i
+        End If
+        
+    End Function
+    
+    Function MakeWindowHeadbar(id)
+        //Laskeskelee ja piirtää muistiin ikkunan otsikkopalkin. Käytetään
+        //luotaessa uusi ikkuna tai muutettaessa olemassa olevan ikkunan
+        //otsikkopalkkia.
+        //Funktiota ei normaalisti tarvitse käyttää muualta kuin itse Janelas-
+        //moottorista. Se ei piirrä mitään suoraan näytölle, eikä luo ikkunalle
+        //otsikkopalkkia, mikäli ikkunasta on estetty kehykset ja otsikkopalkki.
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        
+        'Poistetaan ensin vanhat otsikkopalkit
+        For i = 0 To 7
+            If WindowHeadbar(id,i)>0 Then DeleteImage WindowHeadbar(id,i)
+        Next i
+    
+        If WindowHeadbarThickness(id) > 0 Then
+            
+            x=WindowX(id)
+            y=WindowY(id)
+            w=WindowW(id)+WindowBorderThickness(id)*2
+            h=WindowH(id)
+            palkinpaksuus=WindowHeadbarThickness(id)
+            otsikko$=WindowTitle(id)
+        
+            For i = 0 To 3 ' luodaan neljä erilaista palkkia (mm. ei-aktiivinen ja aktiivinen, ikkuna auki ja ikkuna kiinni)
+                
+                WindowHeadbar(id,i) = MakeImage(w,palkinpaksuus)
+                MaskImage WindowHeadbar(id,i), 255,0,255
+                DrawToImage WindowHeadbar(id,i)
+                Color 255,0,255
+                Box 0,0,w,palkinpaksuus,True
+                
+                If WindowHeadbarUsersImage(id,0)=OFF Then
+                    If i=0 or i=2 Then 'päätetään värit ikkunan aktiiviselle ja ei-aktiiviselle palkille
+                        r1 = WindowColorActiveHeadbar(id,0,0)
+                        g1 = WindowColorActiveHeadbar(id,0,1)
+                        b1 = WindowColorActiveHeadbar(id,0,2)
+                        r2 = WindowColorActiveHeadbar(id,1,0)
+                        g2 = WindowColorActiveHeadbar(id,1,1)
+                        b2 = WindowColorActiveHeadbar(id,1,2)
+                    ElseIf i=1 Or i=3 Then
+                        r1 = WindowColorHeadbar(id,0,0)
+                        g1 = WindowColorHeadbar(id,0,1)
+                        b1 = WindowColorHeadbar(id,0,2)
+                        r2 = WindowColorHeadbar(id,1,0)
+                        g2 = WindowColorHeadbar(id,1,1)
+                        b2 = WindowColorHeadbar(id,1,2)
+                    End If
+                
+                    If i=0 Or i=1 Then 'kulmien pyöreyden lähtökulma riippuu ikkunan auki-/kiinni-tilasta
+                        lähtökulma=270
+                    ElseIf i=2 Or i=3 Then
+                        lähtökulma=180
+                    End If
+                    For s = lähtökulma To 360
+                        
+                        'Lasketaan viivan päätepisteet
+                        If i=0 Or i=1 Then muoto=0:muoto2=1 Else muoto=90:muoto2=2 'muoto- ja muoto2-muuttujat laskutoimitusta ikkunan auki-/kiinni-tilan mukaan
+                        cossi=Cos(s+muoto)*(palkinpaksuus/muoto2)
+                        x1=-cossi+(palkinpaksuus/muoto2)
+                        x2=w+ cossi -(palkinpaksuus/muoto2)-1
+                        yy=Sin(s+muoto)*palkinpaksuus/muoto2 +palkinpaksuus - (muoto2=2)*palkinpaksuus/2
+                                                                          '"- (muoto2=2)*palkinpaksuus/2" nostaa palkkia, kun ikkuna on pienennettynä korjatakseen virheen
+                    
+                        'Lasketaan viivan väri
+                        pros# = (s-lähtökulma*1.0)/(360.0-lähtökulma)
+                        r = r1 + (r2-r1)*pros
+                        g = g1 + (g2-g1)*pros
+                        b = b1 + (b2-b1)*pros
+    
+                        'piirretään viiva
+                        Color r,g,b
+                        Line x1,yy,x2,yy
+                    
+                    Next s
+                    
+                Else
+                    y=0
+                    x=0
+                    If WindowHeadbarUsersImage(id,i)>0 Then
+                        Img = WindowHeadbarUsersImage(id,i)
+                    Else
+                        Img = WindowHeadbarUsersImage(id,0)
+                    End If
+                    ImageW = ImageWidth(Img)
+                    ImageH = ImageHeight(Img)
+                    Repeat
+                        Repeat
+                            DrawImage Img, x,y
+                            x+ImageW
+                        Until x=>w
+                        x=0
+                        y+ImageH
+                    Until y=>palkinpaksuus
+                End If
+                
+                'tehdään palkista käänteinen kopio, jotta se voidaan tarvittaessa sijoittaa myös ikkunan alapuolelle
+                WindowHeadbar(id,i+4) = CloneImage(WindowHeadbar(id,i))
+                ResizeImage WindowHeadbar(id,i+4), w+2,-palkinpaksuus
+                MaskImage WindowHeadbar(id,i+4), 255,0,255
+                DrawToImage WindowHeadbar(id,i+4)
+                Color 255,0,255
+                Box 0,0,WindowW(i)+WindowBorderThickness(i)*2,WindowH(i)
+            
+            Next i
+            
+            'Lisätään palkkeihin otsikko
+            r=WindowColorTitle(id,0):g=WindowColorTitle(id,1):b=WindowColorTitle(id,2)
+            Color r,g,b
+            f=WindowTitleFont(id)
+            If f<>0 Then SetFont f
+            For i = 0 To 7
+                DrawToImage WindowHeadbar(id,i)
+                If WindowTitleFont(id) <> 0 Then SetFont WindowTitleFont(id)
+                otsikkow=TextWidth(otsikko) : otsikkoh=TextHeight(otsikko)
+                tx = (w-otsikkow)/2
+                ty = (palkinpaksuus-otsikkoh)/2 *YCoordinateFactor
+                Text tx, ty, otsikko
+            Next i
+            
+            DrawToScreen
+        End If
+                        
+    End Function
+    
+    Function ResizeWindow(id, w,h, suurenna_sisältö=0, palkinpaksuus=-1)
+        //Muuttaa ikkunan mittasuhteita
+        //Muuttaa myös ikkunan otsikkopalkin paksuutta, mikäli niin halutaan
+        //suurenna_sisältö = true/false, suurennetaanko ikkunan sisältöä koon muuttuessa
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        
+        WindowW(id)=w
+        WindowH(id)=h
+        If palkinpaksuus <> -1 Then WindowHeadbarThickness(id)=palkinpaksuus
+        If WindowCameraUsed(id) Then
+            w = Max(w,WindowFieldW(id))
+            h = Max(h,WindowFieldH(id))
+        End If
+        If suurenna_sisältö Then
+            ResizeImage WindowContents(id), w,h
+        Else
+            vanhakuva=WindowContents(id)
+            WindowContents(id)=MakeImage(w,h)
+            DrawToImage WindowContents(id)
+            r = WindowColorBackground(id,0)
+            g = WindowColorBackground(id,1)
+            b = WindowColorBackground(id,2)
+            Color r,g,b
+            Box 0,0,w,h
+            DrawImage vanhakuva, 0,0
+            DrawToScreen
+            DeleteImage vanhakuva
+        End If
+        MakeWindowHeadbar(id)
+    End Function
+    
+    Function PositionWindow(id, x,y)
+        //Muuttaa ikkunan sijaintia
+
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+
+        WindowX(id)=x
+        WindowY(id)=y
+    End Function
+    
+    Function DeleteWindow(id)
+        //Poistaa ikkunan
+        //ALL_WINDOWS-parametrin käyttäminen on mahdollista ja se
+        //poistaa kaikki ikkunat
+        
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST=True
+            Return False
+        End If
+        
+        If id = ALL_WINDOWS Then
+            For i = 1 To Min(WindowsNoMax, WindowsNoCreated)
+                If WindowExists(i) Then DeleteWindow(i)
+            Next i
+        Else
+            WindowExists(id)=False
+            DeleteImage WindowContents(id)
+            For i = 0 To 7
+                DeleteImage WindowHeadbar(id,i)
+            Next i
+        End If
+        
+        For i = 0 To 3
+            'Unohdetaan käyttäjän määrittämät otsikkopalkin kuvat
+            'Ei kuitenkaan POISTETA itse kuvia, sillä käyttäjä saattaa tarvita niitä vielä myöhemmin!
+            WindowHeadbarUsersImage(id,i)=0
+        Next i
+        
+        WindowsNo-1
+        
+    End Function
+    
+    Function ChangeWindowBackgroundColor(id, r,g,b)
+        //Muuttaa ikkunan taustan väriä
+    
+        If id <> ALL_WINDOWS And id <> NEW_WINDOWS Then
+            //Asetetaan väri tietylle ikkunalle
+        
+            If Not WindowExists(id) Then
+                WINDOW_DOES_NOT_EXIST=True
+                Return False
+            End If
+            
+            WindowColorBackground(id,0) = r
+            WindowColorBackground(id,1) = g
+            WindowColorBackground(id,2) = b        
+        End If
+        
+        If id = NEW_WINDOWS Or id = ALL_WINDOWS
+            //Asetataan oletusväri
+            
+            WindowDefaultColorBackground(0) = r
+            WindowDefaultColorBackground(1) = g
+            WindowDefaultColorBackground(2) = b
+        End If
+        
+        If id = ALL_WINDOWS Then
+            For i = 1 To Min(WindowsNoMax,WindowsNoCreated)
+                ChangeWindowBackgroundColor(i, r,g,b)
+            Next i
+        End If
+    End Function
+    
+    Function SetWindowState(id, koko, palkin_sijainti=-1)
+        //Avaa tai pienentää ikkunan sekä näyttää tai piilottaa kehyksen
+        
+        If id <> ALL_WINDOWS Then
+            //Muutetaan yksittäistä ikkunaa
+        
+            If Not WindowExists(id) Then
+                WINDOW_DOES_NOT_EXIST = True
+                Return False
+            End If
+            
+            WindowOpen(id) = koko
+            If palkin_sijainti <> -1 Then WindowHeadbarPlace(id) = palkin_sijainti
+            
+        Else
+            //Muutetaan kaikkia ikkunoita rekursiolla
+            For id = 1 To Min(WindowsNoMax, WindowsNoCreated)
+                SetWindowState(id, koko, palkin_sijainti)
+            Next id
+        End If
+    End Function
+    
+    Function HideWindow(id, tila=1)
+        
+        If id = ALL_WINDOWS Then
+            For i = 1 To WindowsNoMax
+                HideWindow(i, tila)
+            Next i
+        Else
+            If Not WindowExists(id) Then
+                WINDOW_DOES_NOT_EXIST = True
+                Return False
+            End If
+            If tila = 1 Then WindowVisible(id) = 0 Else WindowVisible(id) = 1
+        End If
+    End Function
+    
+    Function SetActiveWindowMethod(tila)
+        If tila <0 Or tila >1 Then Return False
+        ActiveWindowMethod = tila
+        Return True
+    End Function
+    
+    Function GetMouseOnWindow()
+        MouseOnWindow=0
+        For i = Min(WindowsNoMax, WindowsNoCreated) To 1 Step -1
+    
+            'Lyhennetään muuttujia
+            id=WindowsDrawOrder(i)
+            x=WindowX(id)-WindowBorderThickness(id)
+            y=WindowY(id)-WindowBorderThickness(id)
+            w=WindowW(id)+WindowBorderThickness(id)*2
+            h=WindowH(id)+WindowHeadBarThickness(id)*2
+            palkinpaksuus = WindowHeadbarThickness(id)
+            If (MouseX()=>x And MouseX()<=x+w) Then
+            
+                'Tarkistetaan ikkunan leveys kehyksineen
+                If palkinpaksuus>0 Then yy=y-palkinpaksuus:hh=h+palkinpaksuus Else yy=y:hh=h
+    
+                'Tarkistetaan ikkunan otsikkopalkin y-koordinaatti kun ikkuna ei ole auki
+                If Not WindowOpen(id) Then
+                    hh = palkinpaksuus
+                    If WindowHeadbarPlace(id)=1 Then yy=y+h-palkinpaksuus
+                End If
+    
+                palkinsijaintimuutos=palkinpaksuus*WindowHeadbarPlace(id) 'jos otsikkopalkki sijaitsee ikkunan alapuolella, siirretään havaintoaluettakin alaspäin
+                If MouseY()=>yy+palkinsijaintimuutos And MouseY()<=yy+hh+palkinsijaintimuutos Then
+                    If MouseOnWindow=0 Then
+                        If Not WindowLocked(id) Then
+                            If WindowVisible(id) Then MouseOnWindow=id
+                        Else
+                            Return False
+                        End If
+                    End If
+                End If
+            End If
+        Next i
+    End Function
+    
+    Function MouseHitOnWindow(id, nappi=1)
+        Return (MouseOnWindow=id And MouseHit(nappi) And WindowLocked(id)=False)
+    End Function
+    
+    Function MouseDownOnWindow(id, nappi=1)
+        Return (MouseOnWindow=id And MouseDown(nappi) And WindowLocked(id)=False)
+    End Function
+    
+    Function LockWindow(id, tila=1)
+        If tila<0 Or tila>1 Then Return False
+        
+        If id = ALL_WINDOWS Then
+            For i = 1 To WindowsNoMax
+                LockWindow(i,tila)
+            Next i
+        Else
+            WindowLocked(id)=tila
+        End If
+    End Function
+    
+    Function MoveWindow(id, x,y, speed=20, SmoothStop=1)
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+        
+        WindowMoveToX(id) = x
+        WindowMoveToY(id) = y
+        WindowMoveSpeed(id) = speed
+        WIndowMoveSmoothStop(id) = SmoothStop
+    End Function
+    
+    Function StopWindowMoving(id)
+        If Not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+        
+        If id = ALL_WINDOWS Then
+            For i = 1 To WindowsNoMax
+                StopWindowMoving(i)
+            Next i
+        Else
+            WindowMoveSpeed(id) = 0
+        End If
+    End Function
+    
+    Function PaintWindowHeadbar(wID, kuva1, kuva2=0, kuva3=0, kuva4=0)
+        If Not WIndowExists(wID) Then
+            WINDOW_DOES_NOT_EXIST =True
+            Return False
+        End If
+        
+        WindowHeadbarUsersImage(wID,0) = kuva1
+        WindowHeadbarUsersImage(wID,1) = kuva2
+        WindowHeadbarUsersImage(wID,2) = kuva3
+        WindowHeadbarUsersImage(wID,3) = kuva4
+        MakeWindowHeadbar(wID)
+    End Function
+    
+    Function SetWindowScrollable(wID, w=0,h=0, Scrollbar=0)
+        If Not WindowExists(wID) Then
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+        
+        If w<>0 And h<>0 Then
+            WindowFieldW(wID) = w
+            WindowFieldH(wID) = h
+            WindowFieldScrollbar(wID) = Scrollbar
+            WindowCameraUsed(wID) = True
+            
+        Else 'Poistetaan vieritysmahdollisuus
+            WindowFieldW(wID) = WindowW(id)
+            WindowFieldH(wID) = WindowH(id)
+            WindowFieldScrollbar(id) = OFF
+            WindowCameraUsed(wID) = False
+        End If
+        ResizeImage WindowContents(wID), WindowFieldW(wID),WindowFieldH(wID)
+    End Function
+    
+    Function PositionWindowCamera(wID, x,y)
+        If not WindowExists(wID) Then
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+        
+        x = Min(Max(x,0),WindowFieldW(wID)-WindowW(wID))
+        y = Min(Max(y,0),WindowFieldH(wID)-WindowH(wID))
+        WindowCameraX(wID) = x
+        WindowCameraY(wID) = y
+    End Function
+    
+    Function SetWindowCameraFollow(wID, objekti, xmuutos=0,ymuutos=0)
+        If not WindowExists(wID) Then
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+        
+        WindowCameraFollow(wID,0)=objekti
+        WindowCameraFollow(WID,1)=xmuutos
+        WindowCameraFollow(wID,2)=ymuutos
+    End Function
+    
+    Function PutScreenToWindow(id, ClearScreen=1, x=0,y=0,w=0,h=0)
+        //Nappaa pelimaailmasta kuvan ja liittää sen ikkunaan
+    
+        If not WindowExists(id) Then
+            WINDOW_DOES_NOT_EXIST = True
+            Return False
+        End If
+        
+        If w=0 Then w=ScreenWidth()-x
+        If h=0 Then h=ScreenHeight()-y
+        CopyBox x,y, w,h, 0,0, SCREEN(),Image(WindowContents(id))
+        
+        If ClearScreen Then
+            DrawToScreen
+            Cls
+        End If
+    End Function
+    
+    Function WorldXOnScreen(x)
+        Return x+ScreenWidth()/2-CameraX()
+    End Function
+    
+    Function WorldYOnScreen(y)
+        Return -y+ScreenHeight()/2+CameraY()
+    End Function
+    
+    Function SaveWindowImage(id,tiedosto$,tila=0)
+        If tila=0 Then
+            x=WindowBorderThickness(id)
+            y=WindowHeadbarThickness(id)+WindowBorderThickness(id)
+            w=WindowW(id)+WindowBorderThickness(id)*2
+            h=WindowH(id)+WindowHeadbarThickness(id)+WindowBorderThickness(id)*2
+            temp=MakeImage(w,h)
+            DrawToImage temp
+            DrawWindow(id,x,y)
+            SaveImage temp, tiedosto
+            DeleteImage temp
+            DrawToScreen
+        ElseIf tila=1 Then
+            temp=MakeImage(WindowW(id),WindowH(id))
+            DrawToImage temp
+            DrawImageBox WindowContents(id),0,0, WindowCameraX(id),WindowCameraY(id), WindowW(id),WindowH(id)
+            DrawToScreen
+            SaveImage temp, tiedosto
+            DeleteImage temp
+        ElseIf tila=2 Then
+            SaveImage WindowContents(id), tiedosto
+        End If
+    End Function
+    
+    Function DrawWindow(id, x=-1,y=-1)
+        //Lyhennetään joitakin muuttujia
+        If x=-1 And y=-1 Then x=WindowX(id):y=WindowY(id)
+        w=WindowW(id):h=WindowH(id)
+        palkinpaksuus=WindowHeadbarThickness(id)    
+    
+        //Piirretään kehys otsikkopalkkeineen
+        If palkinpaksuus>0 Then
+        
+            'Yläpalkki
+                a=0
+                If ActiveWindow=id Or liikutaikkunaa=id Then
+                    If WindowOpen(id) Then
+                        a=0
+                    Else
+                        a=2
+                    End If
+                Else
+                    If WindowOpen(id) Then
+                        a=1
+                    Else
+                        a=3
+                    End If
+                End If
+                If WindowHeadbarPlace(id)=1 Then a+4
+                DrawImage WindowHeadbar(id,a),x-WindowBorderThickness(id),y-palkinpaksuus-WindowBorderThickness(id) + (h+palkinpaksuus)*WindowHeadbarPlace(id)
+            'Kehys
+                If WindowOpen(id) Then
+                    If ActiveWindow=id Then
+                        r = WindowColorActiveBorder(id,0)
+                        g = WindowColorActiveBorder(id,1)
+                        b = WindowColorActiveBorder(id,2)
+                    Else
+                        r = WindowColorBorder(id,0)
+                        g = WindowColorBorder(id,1)
+                        b = WindowColorBorder(id,2)
+                    End If
+                    Color r,g,b
+                    For b = 1 To WindowBorderThickness(id)
+                        Box x-b,y-b,w+b*2,h+b*2,OFF
+                    Next b
+                End If
+            
+        End If
+    
+    //Piirretään sisältö
+        If WindowOpen(id) Then
+            if WindowCameraUsed(id) then
+                DrawImageBox WindowContents(id), x,y, WindowCameraX(id), WindowCameraY(id), WindowW(id), WindowH(id)
+            Else
+                DrawImage WindowContents(id), x,y
+            End If
+        End If
+    End Function

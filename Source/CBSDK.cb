@@ -1,0 +1,437 @@
+//All functions inside this file are copied from CoolBasic Software Development Kit.
+
+//Modifications:
+//	- Added YCoordinateFactor to all Text command calls. This change fixes bug that makes Y coordinate negative when writing text to images.
+//	- Added window parameter to functions so they can get mouse coordinates inside windows
+
+//cbGraphics.cb
+//-------------
+// Piirt‰‰ kolmion.
+Function Triangle(x1,y1,x2,y2,x3,y3,fill=0) 'by atomimalli
+
+    Line x1,y1,x2,y2
+    Line x2,y2,x3,y3
+    Line x3,y3,x1,y1
+
+    If fill = True Then
+        If y2<y1 Then 'jos p2 on ylemp‰n‰ kuin p1 vaihdetaan niiden paikkaa
+            tmp=y1
+            y1=y2
+            y2=tmp
+            
+            tmp=x1
+            x1=x2
+            x2=tmp
+        EndIf
+        
+        If y3<y1 Then 'jos p3 on ylemp‰n‰ kuin p1 vaihdetaan niiden paikkaa
+            tmp=y1
+            y1=y3
+            y3=tmp
+            
+            tmp=x1
+            x1=x3
+            x3=tmp
+        EndIf
+        
+        If y3<y2 Then 'jos p3 on ylemp‰n‰ kuin p2 vaihdetaan niiden paikkaa
+            tmp=y2
+            y2=y3
+            y3=tmp
+            
+            tmp=x2
+            x2=x3
+            x3=tmp
+        EndIf
+        
+        'pisteet ovat nyt j‰rjestyksess‰
+        'ylh‰‰lt‰ alas p1(x1,y1), p2(x2,y2), p3(x3,y3)
+        dy1=y2-y1'pystysuora matka p1:sta p2:seen
+        dx1=x2-x1'vaakasuora matka p1:sta p2:seen
+        dy2=y3-y1'pystysuora matka p1:sta p3:meen
+        dx2=x3-x1'vaakasuora matka p1:sta p3:meen
+        
+        If dy1 Then 'jos kolmion yl‰osa on pidempi kuin 0
+            'k‰yd‰‰n l‰pi kaikki vaakaviivat kolmion yl‰osassa(p1-p2)
+            For i = y1 To y2
+                'lasketaan seuraava x-koordinaatti p1:st‰ p2:seen
+                ax=x1+((i-y1)*dx1)/dy1
+                'lasketaan seuraava x-koordinaatti p1:st‰ p3:meen
+                bx=x1+((i-y1)*dx2)/dy2
+                Line ax,i,bx,i 'piirret‰‰n viiva kolmion reunojen v‰lille
+            Next i
+        EndIf
+        
+        dy1=y3-y2'pystysuora matka p2:sta p3:meen
+        dx1=x3-x2'vaakasuora matka p2:sta p3:meen
+        
+        If dy1 Then 'jos kolmion alaosa on pidempi kuin 0
+            'k‰yd‰‰n l‰pi kaikki vaakaviivat kolmion alaosassa(p2-p3)
+            For i = y2 To y3
+                'lasketaan seuraava x-koordinaatti p2:st‰ p3:meen
+                ax=x2+((i-y2)*dx1)/dy1
+                'lasketaan seuraava x-koordinaatti p1:st‰ p3:meen
+                bx=x1+((i-y1)*dx2)/dy2
+                Line ax,i,bx,i 'piirret‰‰n viiva kolmion reunojen v‰lille
+            Next i
+        EndIf
+    EndIf
+EndFunction
+
+
+//cbFormElements.cb
+//-----------------
+
+Function CmdButton(txt$,x,y,w=0,h=0, window=0) 'by alodnal
+    If w = 0 Then w = TextWidth(txt$)
+    If h = 0 Then h = TextHeight(txt$)
+	old_r = getRGB(RED)
+	old_g = getRGB(GREEN)
+	old_b = getRGB(BLUE)
+	mx = MouseX() : my = MouseY()
+	If window Then mx = MouseXInWindow(window) : my = MouseYInWindow(window)
+	If mx >= x And mx <= x+w And my >= y And my <= y+h Then
+		Color 255,255,255
+		Line x-1,y-1,x+w,y-1
+		Line x-1,y,x-1,y+h
+		Color 128,128,128
+		Line x,y+h,x+w,y+h
+		Line x+w,y,x+w,y+h-1
+		Color 64,64,64
+		Line x+w+1,y-1,x+w+1,y+h
+		Line x-1,y+h+1,x+w+1,y+h+1
+		Color 212,208,200
+		Box x,y,w,h
+		Color 0,0,0
+		Text x+(w/2)-(TextWidth(txt)/2)-1,YCoordinateFactor*(y+(h/2)-(TextHeight(txt)/2)),txt
+		is_clicked = False
+		If MouseDown(1) Then
+			Color 212,208,200
+			Box x,y,w+1,h+1
+			Color 64,64,64
+			Line x-1,y-1,x+w,y-1
+			Line x-1,y,x-1,y+h	
+			Color 128,128,128
+			Line x,y,x+w-1,y
+			Line x,y+1,x,y+h-1
+			Color 255,255,255
+			Line x+w+1,y-1,x+w+1,y+h
+			Line x-1,y+h+1,x+w+1,y+h+1
+			Color 0,0,0
+			Text x+(w/2)-(TextWidth(txt)/2),YCoordinateFactor*(y+(h/2)-(TextHeight(txt)/2)+1),txt
+			is_clicked = False
+		ElseIf MouseUp(1) Then
+			is_clicked = True
+		EndIf
+	Else
+		Color 255,255,255
+		Line x-1,y-1,x+w,y-1
+		Line x-1,y,x-1,y+h
+		Color 128,128,128
+		Line x,y+h,x+w,y+h
+		Line x+w,y,x+w,y+h-1
+		Color 64,64,64
+		Line x+w+1,y-1,x+w+1,y+h
+		Line x-1,y+h+1,x+w+1,y+h+1
+		Color 212,208,200
+		Box x,y,w,h
+		Color 0,0,0
+		Text x+(w/2)-(TextWidth(txt)/2)-1,YCoordinateFactor*(y+(h/2)-(TextHeight(txt)/2)),txt
+		is_clicked = False
+	EndIf
+	Color old_r,old_g,old_b
+	Return is_clicked
+End Function
+
+Function Inputfield(key,x,y,w,h,returns$,passchar$="",window=0) 'by alodnal
+	old_r = getRGB(RED)
+	old_g = getRGB(GREEN)
+	old_b = getRGB(BLUE)
+	mx = MouseX() : my = MouseY()
+	If window Then mx = MouseXInWindow(window) : my = MouseYInWindow(window)
+	If w < TextWidth("A") Then w = TextWidth("A")
+	If h < TextHeight("A") Then h = TextHeight("A")
+	If Len(returns) < 3 Then
+		is_activated$ = "0"
+		keytime$ = "00"
+		blink$ = "00"
+		stri$ = ""
+	Else
+		is_activated$ = Left(returns,1)
+		keytime$ = Mid(returns,2,2)
+		blink$ = Mid(returns,4,2)
+		stri$ = Mid(returns,6,Len(returns)-5)	
+	EndIf
+	If mx >= x And mx <= x+w And my >= y And my <= y+h Then
+		If MouseHit(1) Then is_activated = "1": blink = "0"	
+	Else
+		If MouseHit(1) Then is_activated = "0"	
+	EndIf
+	If is_activated = "1" Then
+		blink = Int(blink) + 1
+		For a = 32 To 126
+			If key = a Or key = 145 Then
+				stri = StrInsert(stri,Len(stri)+1,Chr(key))
+				blink = "0"	
+			EndIf	
+		Next a
+		For b = 160 To 255
+			If key = 146 Or key = b Then	
+				stri = StrInsert(stri,Len(stri)+1,Chr(key))
+				blink = "0"	
+			EndIf	
+		Next b	
+		If Len(stri) > 0 Then
+			If KeyHit(14) Then	
+				stri = StrRemove(stri,Len(stri),1)
+				blink = "0"		
+			ElseIf KeyDown(14) Then	
+				If Int(keytime) < 20 Then keytime = Int(keytime) + 1
+				If Int(keytime) >= 20 Then stri = StrRemove(stri,Len(stri),1)
+				blink = "0"
+			Else
+				keytime = "00"			
+			EndIf		
+		EndIf	
+	EndIf
+	Color 64,64,64
+	Line x-1,y-1,x+w-1,y-1
+	Line x-1,y,x-1,y+h-1
+	Color 212,208,200
+	Line x-1,y+h,x+w,y+h
+	Line x+w,y-1,x+w,y+h-1
+	Color 128,128,128
+	Line x-2,y-2,x+w,y-2
+	Line x-2,y-1,x-2,y+h
+	Color 255,255,255
+	Line x-2,y+h+1,x+w+1,y+h+1
+	Line x+w+1,y-2,x+w+1,y+h
+	Box x,y,w,h
+	Color 0,0,0
+	letter_amount = RoundDown(w / TextWidth("A")) - 1
+    If passchar$ = "" Then
+        Text x+1,YCoordinateFactor*(y+(h/2)-(TextHeight("A")/2)),Right(stri,letter_amount)
+    Else
+        char_amount = Min( Len(stri), letter_amount )
+        Text x+1,YCoordinateFactor*(y+(h/2)-(TextHeight("A")/2)),String(passchar$,char_amount)
+    EndIf
+    If is_activated = "1" Then
+		If Int(blink) < 21 Then
+			Line x+TextWidth(Right(stri,letter_amount))+2,y+(h/2)-(TextHeight(stri)/2),x+TextWidth(Right(stri,letter_amount))+2,y+(h/2)+(TextHeight(stri)/2)		
+		ElseIf Int(blink) > 39 Then	
+			blink = "0"		
+		EndIf	
+	EndIf
+	If Len(keytime) < 2 Then keytime = "0" + keytime
+	If Len(blink) < 2 Then blink = "0" + blink	
+	Return is_activated + keytime + blink + stri
+	Color old_r,old_g,old_b
+End Function
+
+Function GetText(returns$)
+	Return Mid(returns,6,Len(returns)-5)
+End Function
+
+Function SetText(txt$)
+	Return "00000" + txt$
+End Function
+
+Const ListsNoMax = 5 'Korkeintaan N listaa
+Const ListItemsNoMax = 500 'Korkeintaan N valintaa per lista
+Dim ListItems(ListsNoMax,ListItemsNoMax) As String
+Dim ListItemsNo(ListsNoMax)
+Dim ListSelection(ListsNoMax)
+Dim ListScroll(ListsNoMax)
+Dim ListActive(ListsNoMax) As Byte
+Dim ListSelectChanged(ListsNoMax) As Byte
+
+Function List(id, x,y, w,h, Scrollbar=1, keySelection=1, window=0)
+	old_r = getRGB(RED)
+	old_g = getRGB(GREEN)
+	old_b = getRGB(BLUE)
+	If w < TextWidth("A") Then w = TextWidth("A")
+	If h < TextHeight("A") Then h = TextHeight("A")
+	mx = MouseX() : my = MouseY()
+	If window Then mx = MouseXInWindow(window) : my = MouseYInWindow(window)
+    
+	Color 64,64,64
+	Line x-1,y-1,x+w-1,y-1
+	Line x-1,y,x-1,y+h-1
+	Color 212,208,200
+	Line x-1,y+h,x+w,y+h
+	Line x+w,y-1,x+w,y+h-1
+	Color 128,128,128
+	Line x-2,y-2,x+w,y-2
+	Line x-2,y-1,x-2,y+h
+	Color 255,255,255
+	Line x-2,y+h+1,x+w+1,y+h+1
+	Line x+w+1,y-2,x+w+1,y+h
+	Box x,y,w,h
+    
+    If mx Then
+        If mx=>x And mx<=x+w And my=>y And my<=y+h Then
+            If ListActive(id)=False And keySelection Then a=mousemovez() 'pyyhkii hiiren rullan tiedot pois, jottei aktivointi saa listaa rullaamaan hassusti mousemovez
+            ListActive(id)=True
+            If MouseHit(1) Then
+                If Scrollbar=False Or MouseX()<x+w-15 Then
+                    item = (my-y)/TextHeight("A")+ListScroll(id)
+                    SelectListItem(id,item)
+                    ListSelectChanged(id)=True
+                End If
+            End If
+        Else
+            ListActive(id)=False
+        End If
+    End If
+    
+    If keySelection And ListActive(id) Then
+        If KeyHit(cbkeyup) Then ListSelection(id)=Max(ListSelection(id)-1,1):ListSelectChanged(id)=True
+        If KeyHit(cbkeydown) Then ListSelection(id)=Min(ListSelection(id)+1,ListItemsNo(id)):ListSelectChanged(id)=True
+        ListScroll(id)=ListScroll(id)-MouseMoveZ()
+        ListScroll(id) = Max(Min(ListScroll(id),ListItemsNo(id)-h/TextHeight("A")+1),1)
+    End If
+    
+    ListSelection(id) = Min(Max(ListSelection(id),0),ListItemsNo(id))
+    
+    If ListSelection(id)=>ListScroll(id) And ListSelection(id)<ListScroll(id)+h/TextHeight("A") Then
+        Color cbdarkblue
+        yy = y+ (ListSelection(id)-ListScroll(id))*TextHeight("A")
+        Box x+1,yy, w-2, TextHeight("A")
+    End If
+        
+    If ListItemsNo(id)>h/TextHeight("A") And Scrollbar Then
+        If ListActive(id) And MouseDown(1) And MouseX()=>x+w-15 Then
+            Pros# = ((my-y)*1.0)/h
+            ListScroll(id) = Pros *(ListItemsNo(id)-h/TextHeight("A"))+1
+            ListScroll(id) = Max(Min(ListScroll(id),ListItemsNo(id)-h/TextHeight("A")+1),1)
+        End If
+    
+        Color 64,64,64
+        Box x+w-15,y,15,h, OFF
+        Color 212,208,200
+        Box x+w-14,y+1,13,h-2,OFF
+        Color 212,208,200
+        Box x+w-13,y+2,11,h-4
+        
+        Color cbdark
+        Pros# = (ListScroll(id)-1.0)/(ListItemsNo(id)-h/TextHeight("A"))
+        yy = y + (h-15)*Pros
+        Box x+w-15,yy,15,TextHeight("A")
+    End If
+    
+    ListScroll(id)=Max(Min(ListScroll(id),ListItemsNo(id)-h/TextHeight("A")+1),1)
+
+    Color 0,0,0
+    MinItem=max(ListScroll(id),1)
+    MaxItem=min(ListScroll(id)+h/TextHeight("A")-1,ListItemsNo(id))
+    For i = MinItem To MaxItem
+        yy=y+TextHeight("A")*(i-ListScroll(id))
+        Text x+2,YCoordinateFactor*yy, ListItems(id,i)
+    Next i
+    
+    Color old_r,old_g,old_b
+End Function
+
+Function SelectListItem(id,item)
+    ListSelection(id)=item
+End Function
+
+Function SelectListItemString(id,item$)
+    For i = 1 To ListItemsNo(id)
+        If ListItems(id,i)=item Then
+            ListSelection(id)=i
+            Return True
+        End If
+    Next i
+    Return False
+End Function
+
+Function AddListItem(id, item$, selection=0)
+    If ListItemsNo(id)=ListItemsNoMax Then Return False
+    ListItemsNo(id)=ListItemsNo(id)+1
+    ListItems(id,ListItemsNo(id))=item
+    If selection Then
+        ListSelection(id)=ListItemsNo(id) : ListSelectChanged(id)=True
+        ListScroll(id) = Max(ListScroll(id),ListSelection(id))
+    End If
+    Return ListItemsNo(id)
+End Function
+
+Function DeleteListItem(id, item)
+    If item=0 Then Return False
+    For i = item To ListItemsNo(id)
+        If i<ListItemsNo(id) Then ListItems(id,i)=ListItems(id,i+1) Else ListItems(id,i)=""
+    Next i
+    ListItemsNo(id) = ListItemsNo(id)-1
+End Function
+
+Function DeleteListItemString(id, itemString$)
+    For i = 1 To ListItemsNo(id)
+        If ListItems(id,i)=itemString Then
+            item=i
+            Exit
+        End If
+    Next i
+    If item=0 Then Return False
+    For i = item To ListItemsNo(id)
+        If i<ListItemsNo(id) Then ListItems(id,i)=ListItems(id,i+1) Else ListItems(id,i)=""
+    Next i
+    ListItemsNo(id) = ListItemsNo(id)-1
+    Return True
+End Function
+
+Function FormatList(id)
+    For i = 1 To ListItemsNo(id)
+        ListItems(id,i)=""
+    Next i
+    ListItemsNo(id)=0
+    ListSelectionChanged(id)=False
+    ListSelection(id)=0
+End Function
+
+Function ChangeListItem(id,item,NewItem$)
+    ListItems(id,item) = NewItem
+End Function
+
+Function ChangeListItemString(id,item$,NewItem$)
+    For i = 1 To ListItemsNo(id)
+        If ListItems(id,i)=item Then
+            ListItems(id,i) = NewItem
+            Return True
+        End If
+    Next i
+    Return False
+End Function
+
+Function GetListSelection(id)
+    Return ListItems(id,ListSelection(id))
+End Function
+
+Function ListSelectionChanged(id)
+    If ListSelectChanged(id) Then
+        ListSelectChanged(id)=False
+        Return True
+    Else
+        Return False
+    End If
+End Function
+
+Function SortList(id,sortType=0)
+    //sortType: 0: Nouseva aakkosj‰rjestys; 1: Laskeva aakkosj‰rjestys
+    
+    For i = 1 To ListItemsNo(id)
+        iItem$ = ListItems(id,i)
+        For j = i+1 To ListItemsNo(id)
+            jItem$ = ListItems(id,j)
+            If jItem<iItem And sortType=0 Then
+                ListItems(id,i)=jItem
+                ListItems(id,j)=iItem
+                iItem=jItem
+            ElseIf jItem>iItem And sortType=1 Then
+                ListItems(id,i)=jItem
+                ListItems(id,j)=iItem
+                iItem=jItem
+            End If
+        Next j
+    Next i
+End Function

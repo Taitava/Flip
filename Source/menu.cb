@@ -1,0 +1,178 @@
+
+'Varataan muuttujat
+Const COUNT_MAX_MENUS	= 10
+Const COUNT_MAX_OPTIONS	= 34
+Const MENU_THICKNESS	= 20
+Const OPTION_WIDTH		= 100
+
+
+Dim Menus(COUNT_MAX_MENUS) As String
+Dim Options(COUNT_MAX_OPTIONS,1) As string
+Global CountOptions As Byte
+Global CountMenus As Byte
+Global MenuOpen As Byte 'Auki olevan valikon id
+Global SelectedOption As String
+Global SelectedMenu As String
+Global FontW : FontW = TextWidth("A")
+Global FontH : FontH = TextHeight("A")
+Global OpenMenuX
+Global OpenMenuTitleW
+
+Function NewMenu(name As String)
+	CountMenus+1
+    For x = 1 to COUNT_MAX_MENUS
+        If Menus(x) = "" Then
+            Menus(x) = name
+            Return x
+        End If
+    Next x
+End Function
+
+Function NewOption(menu_id As byte, name As String)
+    For id = 1 To COUNT_MAX_OPTIONS
+        If Options(id,1) = "" Then
+			Options(id,0) = menu_id
+            Options(id,1) = name
+			CountOptions+1
+            Return id
+        End If
+    Next id
+	MakeError "NewOption(): Array is too small fo"+"r a "+"ew menu option."
+	Return False
+End Function
+
+Function DrawMenus()
+    //Piirret‰‰n perusvalikko
+    Color 212,208,200
+    Box 0,0,ScreenWidth(),MENU_THICKNESS,True
+    Color 0,0,0
+    Box 0,MENU_THICKNESS, ScreenWidth(),1
+    Box 0,0,1,MENU_THICKNESS 'korjaa kauneusvirheen
+    x=0
+    For i = 1 to CountMenus
+        If Menus(i) <> "" Then
+            If MenuOpen = i Then 'korostetaan avattu valikko
+                Color 190,200,200
+                Box x,0,TextWidth(Menus(i))+10,MENU_THICKNESS
+                Color 0,0,0
+             End if
+            Text x+5,2, Menus(i)
+            Box x,0,1,MENU_THICKNESS
+        End If
+        x=x + TextWidth(Menus(i)) + 10 '**
+    Next i
+    Box x,0,1,MENU_THICKNESS 'loppupystyviiva
+    
+    //Tarkistetaan, klikataanko mit‰‰n valikkoa
+    vanhaavx = OpenMenuX
+    vanhaavol = OpenMenuTitleW
+    OpenMenuX = 0
+    avattu=False
+    For i = 1 to COUNT_MAX_MENUS
+        If MouseX() => OpenMenuX And MouseX() < OpenMenuX+TextWidth(Menus(i)) Then
+            If MouseY() <= MENU_THICKNESS And (MouseDown(1) Or MenuOpen > 0) And Menus(i) <> "" Then
+                MenuOpen = i
+                SelectedMenu = Menus(i)
+                avattu=True
+                OpenMenuTitleW = TextWidth(Menus(i))+10
+                Exit:Exit:Exit
+            End If
+        End If
+        OpenMenuX = OpenMenuX + TextWidth(Menus(i))+10 '**
+    Next i
+    If avattu=False Then OpenMenuX=vanhaavx : OpenMenuTitleW=vanhaavol
+    //N‰ytet‰‰n avatun valikon sis‰ltˆ
+    If MenuOpen > 0 Then
+        x = OpenMenuX
+        v = MenuOpen
+        
+        //Selvitet‰‰n valikon leveys
+        width=OPTION_WIDTH
+        For i = 1 To COUNT_MAX_OPTIONS
+			If Options(i,0) = v Then
+				width = Max(width, TextWidth(Options(i,1))+10)
+			EndIf
+        Next i
+        
+		pxy=0
+        For y = 1 to COUNT_MAX_OPTIONS
+            If Options(y,0) = v And Options(y,1) <> "" Then
+                Color 0,0,0
+				pxy + MENU_THICKNESS
+                Box x,pxy,1,MENU_THICKNESS 'VIIVA
+                Box x+width,pxy,1,MENU_THICKNESS 'VIIVA
+                If IsLastOptionInMenu(y) Then 'Jos viimeinen valinta
+                    Box x,pxy+MENU_THICKNESS,width,1
+                End If
+                If Options(y,1) <> "-" Then
+                    'Valitaan v‰ri sen mukaan, onko hiiri valinnan kohdalla vai ei
+                    Color 190,200,200 'tavallinen v‰ri
+					txt$ = Options(y,1)
+					If Left(txt,1) = "." Then
+						'Kyseess‰ ON ohjetekstiksi tarkoitettu valinta, jota ei voi valita.
+						txt = Right(txt, Len(txt)-1)
+					ElseIf MouseX() > x And MouseX() < x+width Then
+						If MouseY() > pxy and MouseY() < pxy+MENU_THICKNESS Then
+							Color 212,208,200 'Valittu v‰ri
+						End If
+					End If
+                    Box x+1,pxy-1,width-1,MENU_THICKNESS+1,True
+                    Color 0,0,0
+                    Text x+5,pxy+2,txt
+                Else
+                    Color 190,200,200
+                    Box x+1,pxy-1,width-1,MENU_THICKNESS+1,True
+                    Color 0,0,0
+                    Box x,pxy+MENU_THICKNESS/2,width,1
+                End If
+            End if
+        Next y
+        
+        Color 190,200,200
+        Triangle(x+OpenMenuTitleW,1, x+OpenMenuTitleW,MENU_THICKNESS-1, x+width-1,MENU_THICKNESS,true)
+        Color 0,0,0
+        Line x+OpenMenuTitleW,0, x+width,MENU_THICKNESS-1
+    End If
+
+    //Tarkistetaan, klikataanko mit‰‰n valintaa
+    SelectedOption = ""
+    If MenuOpen > 0 And MouseHit(1) Then
+        x	= OpenMenuX
+		pxy	= 0
+        For y = 1 to COUNT_MAX_OPTIONS
+			If Options(y,0) = MenuOpen Then
+				pxy+MENU_THICKNESS
+				If MouseX() > x And MouseX() < x+width then
+					If MouseY() > pxy And MouseY() < pxy+MENU_THICKNESS Then
+						SelectedOption = y
+						Exit:Exit:Exit:Exit
+					End If
+				End If
+			EndIf
+        Next y
+        MenuOpen = 0 'suljetaan valikko
+    End If
+End Function
+
+Function IsSelected(id)
+    If SelectedOption = id Then
+        SelectedOption = 0
+        Return True
+    End If
+End Function
+
+Function DeleteOption(id)
+	Options(id,0) = ""
+    Options(id,1) = ""
+End Function
+
+Function EditOption(id, new_name$)
+    Options(id,1) = new_name
+End Function
+
+Function IsLastOptionInMenu(option_id)
+	For i = option_id+1 To CountOptions
+		If Options(i,0) = Options(option_id,0) Then Return False
+	Next i
+	Return True
+EndFunction

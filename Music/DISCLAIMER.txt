@@ -1,0 +1,31 @@
+.DISCLAIMER
+
+This music package includes trackermodules made by me ( noby ) from the past few years. This archive is assembled specifically for Kpelit and is not allowed to be spread as it is without a permission. These modules are free to be used in any non-commercial product, be it game or pretty much anything alse, with these conditions:
+
+1. The product must be as said, non-commercial. If you don't know what it means, don't us these files. Any other usage will be interpreted as a violation of these rules.
+
+2. The product in question must not violate any of the laws in Finland.
+
+3. My nickname / handle ( noby ) MUST be included in the creadits of the product, credited as a musician.
+
+4. I ( noby ) have the full right to deny you from using the music on your product if I so see, or change any of these conditions if I so please.
+
+5. You agree to obey these conditions if you use any of the content included in the 'modules' folder in your product(s).
+
+
+.OTHER DECREES
+
+1. You may NOT alter or change in any way the modules without my permission.
+
+2. You may NOT spread any of the contents of the 'modules' folder without my permission, except when being spread with a game or some other product you have made, for which, consult the usage conditions above.
+
+3. You MAY use and extract the sample data included in the modules, as most of the samples are not made by me.
+
+4. You may NOT use any parts of the pattern data, or copy any parts of the actual song without my ( noby ) permission.
+
+5. If you would like to use these modules in any commercial product, send me e-mail to noby92@luukku.com
+
+6. If you are unsure about any of the conditions listed above, or if you have any other questions, consult me from the e-mail given above.
+
+
+PS. If you use any of the modules in a product of your's, I am more than happy to hear about your creation. It is not required, but is highly recommended for you to do so! You may send me e-mail in either English or Finnish. The address is noby92@luukku.com

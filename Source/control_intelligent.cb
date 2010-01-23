@@ -1,0 +1,68 @@
+control_place_pawn	= False
+control_pawn_x		= 0
+control_pawn_y		= 0
+
+If CPUWait And timer_cpu_wait = 0 Then timer_cpu_wait = Timer()
+
+//ATTENTION! This artificial intelligence is not part of the official game release due to poor results against the randomizer AI. A better AI will replace this one in the future.
+
+If Timer() > timer_cpu_wait + CPU_WAIT_TIME Or CPUWait=False Then
+	timer_cpu_wait = 0
+
+	If CanPlayerMove(Turn) Then
+
+		If mem_possible_cells = 0 Then
+
+			mem_possible_cells	= MakeMEMBlock(1)
+			count_possible_cells= 0
+			For fc.FreeCell = Each FreeCell
+				If CanMakeFlips(Turn, fc\cell_x,fc\cell_y) Then
+					ResizeMEMBlock mem_possible_cells, (count_possible_cells+1)*4
+					PokeShort mem_possible_cells, count_possible_cells*4+0, fc\cell_x
+					PokeShort mem_possible_cells, count_possible_cells*4+2, fc\cell_y
+					count_possible_cells + 1
+				EndIf
+			Next fc
+
+		Else
+
+			max_value				= -999
+			max_value_cell_x		= 0
+			max_value_cell_y		= 0
+			depth					= 3
+			For i = 0 To count_possible_cells-1
+
+				possible_cell_x			= PeekShort(mem_possible_cells, i*4+0)
+				possible_cell_y			= PeekShort(mem_possible_cells, i*4+2)
+				count_adjacent_same		= 0
+				count_adjacent_opponent	= 0
+				count_adjacent_free		= 0
+				For adjacent_cell_x = Max(possible_cell_x-depth,0) To Min(possible_cell_x+depth,MAP_W-1)
+					For adjacent_cell_y = Max(possible_cell_y-depth,0) To Min(possible_cell_y+depth,MAP_H-1)
+						If adjacent_cell_x <> possible_cell_x Or adjacent_cell_y <> possible_cell_y Then
+							If Map(adjacent_cell_x,adjacent_cell_y) = Turn Then
+								count_adjacent_same + 1
+							ElseIf Map(adjacent_cell_x,adjacent_cell_y) > 0 Then
+								count_adjacent_opponent+1
+							Else
+								count_adjacent_free + 1
+							EndIf
+						EndIf
+					Next adjacent_cell_y
+				Next adjacent_cell_x
+				value = -count_adjacent_opponent + count_adjacent_same - count_adjacent_free
+				value = value * ((possible_cell_x=0 Or possible_cell_x=MAP_W-1)+1) * ((possible_cell_y=0 Or possible_cell_y=MAP_H-1)+1)
+				If value > max_value Or (value = max_value And Rand(0,1)) Then
+					max_value			= value
+					max_value_cell_x	= possible_cell_x
+					max_value_cell_y	= possible_cell_y
+				EndIf
+			Next i
+			DeleteMEMBlock mem_possible_cells
+			mem_possible_cells	= 0
+			control_place_pawn	= True
+			control_pawn_x		= max_value_cell_x
+			control_pawn_y		= max_value_cell_y
+		EndIf
+	EndIf
+EndIf
